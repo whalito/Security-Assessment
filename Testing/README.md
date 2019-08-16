@@ -31,20 +31,22 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * MSSQL (Links, Users, Default and Weak Passwords, Databases, ACL on .mdf, Vulnerable configurations...)
 
 (ACL's for System, Local Administrators, and TrustedInstaller is being ignored)
-### Test-Linux.ps1
-	Invoke-Linux		-  Run Bash script on multiple hosts simultaneously with Posh-SSH
 ### Test-Windows.ps1
 	Invoke-WindowsWMI	-  Run PowerShell script on multiple hosts simultaneously with WMI
 	Invoke-WindowsPS	-  Run PowerShell script on multiple hosts simultaneously with PSRemote
-### Invoke-Stager.ps1
-	Invoke-Stager		-  Example how to use -ScriptPath or -URL with Test-Windows.ps1 functions
-### Test-Domain.ps1
-	Invoke-Domain		-  Runs simple checks on the domain
+	Invoke-DomainEnum	-  Runs simple checks on the domain
 * Domain and Forest Trust
-* GPO Autologon and CPassword in Sysvol
+* CPassword in Sysvol
 * Active Directory Integrated DNS Wildcard Record
 * Password Policy
 * MachineAccountQuota
+* Exchange Version
+* CA templates
+* BloodHound
+### Test-Linux.ps1
+	Invoke-Linux		-  Run Bash script on multiple hosts simultaneously with Posh-SSH
+### Invoke-Stager.ps1
+	Invoke-Stager		-  Example how to use -ScriptPath or -URL with Test-Windows.ps1 function
 ### bloodhoundanalytics.py
 	Gather Active Directory statistics from BloodHound data
 
