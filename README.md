@@ -62,6 +62,10 @@ https://github.com/BloodHoundAD/BloodHound/
 
 https://www.tenable.com/products/nessus
 
+https://github.com/torrentalle/Ubuntu1804-CIS
+
+https://github.com/dev-sec/windows-baseline
+
 # Nessus Audit Files
 https://github.com/nsacyber/Windows-Secure-Host-Baseline/tree/master/Windows/Compliance
 
