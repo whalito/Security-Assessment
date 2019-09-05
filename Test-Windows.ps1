@@ -1,4 +1,3 @@
-#Multi Threading :D
 #Install-Module -Name PoshRSJob -Force
 #Too big scripts will not work with ScriptPath
 function Invoke-WindowsWMI{
@@ -202,8 +201,6 @@ function Invoke-WindowsWMI{
 #Invoke-WindowsWMI -Url 'https://raw.githubusercontent.com/cube0x0/Security-Assessment/master/Testing/chaps.ps1'
 #Invoke-WindowsWMI -ScriptPath 'smallerscript.ps1'
 
-
-#Multi Threading :D
 #Install-Module -Name PoshRSJob -Force
 #Too big scripts will not work with ScriptPath
 function Invoke-WindowsPS{
@@ -671,19 +668,24 @@ function Invoke-DomainEnum{
             $DistinguishedName = $DistinguishedName
         }
 
+        #Checks dependensies
         @(
             'ASBBypass.ps1'
             'PowerView.ps1'
             'SharpHound.ps1'
         ) | foreach {
             if(-not(Test-Path $PSScriptRoot\$_)){
-                throw "Missing dependencies.. $_"
+                Write-Output "Missing dependencies.. $($_)"
+                $missing=$true
             }
         }
+        if($missing){
+            return
+        }
         . $PSScriptRoot\ASBBypass.ps1
-        Invoke-Bypass | Out-Null
         . $PSScriptRoot\PowerView.ps1
         . $PSScriptRoot\SharpHound.ps1
+        Invoke-Bypass | Out-Null
     }
     process{
         #Check Trust https://github.com/PowerShellMafia/PowerSploit/blob/dev/Recon/PowerView.ps1
@@ -742,6 +744,10 @@ function Invoke-DomainEnum{
             $maq=($adsi.FindOne()).properties.'ms-ds-machineaccountquota'
             Write-Host "MachineAccountQuota: $maq"
          }
+
+        #Accounts with high badpwdcount
+        Write-Output "`n[*] Accounts with high badpwdcount"
+        Get-DomainUser -Properties badpwdcount,samaccountname | where -Property badpwdcount -ge 3
 
         #Domain Password Policy
         Write-Output "`n[*] Testing Domain Password Policy"
@@ -807,7 +813,7 @@ function Invoke-DomainEnum{
             Write-Output "Failed checking for privexchange"
         }
         if($ExchangeVersion){
-            Write-Output "Exchange found: $ExchangeVersions[$ExchangeVersion]"
+            Write-Output "Exchange found: $($ExchangeVersions[$ExchangeVersion])"
         }
 
         #CA thx to lkys37en https://github.com/lkys37en/Pentest-Scripts/tree/master/Powershell
