@@ -2,7 +2,7 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 
 # Poc's
 ### Invoke-WinEnum.ps1
-	Invoke-WinEnum		-  Check Windows host security (to be continued. thx to Harmj0y and A-mIn3)
+	Invoke-WinEnum		-  Check Windows host security (thx to Harmj0y, lkys37en, and A-mIn3)
 * General System Information
 * Local users in Administrators, RDP, DCOM, PSRemote group
 * Firewall, AntiVirus, and Spyware Product for Workstations
@@ -31,9 +31,11 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * MSSQL (Links, Users, Default and Weak Passwords, Databases, ACL on .mdf, Vulnerable configurations...)
 
 (ACL's for System, Local Administrators, and TrustedInstaller is being ignored)
-### Test-Windows.ps1
+### SecurityAssessment.ps1
 	Invoke-WindowsWMI	-  Run PowerShell script on multiple hosts simultaneously with WMI
 	Invoke-WindowsPS	-  Run PowerShell script on multiple hosts simultaneously with PSRemote
+	Invoke-Linux		-  Run Bash script on multiple hosts simultaneously with Posh-SSH
+	Invoke-NetEnum		-  C# scripts from pingcastle (thx vletoux)
 	Invoke-DomainEnum	-  Runs simple checks on the domain
 * Domain and Forest Trust
 * CPassword in Sysvol
@@ -42,9 +44,8 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * MachineAccountQuota
 * Exchange Version
 * CA templates
+* Null Session on DCs
 * BloodHound
-### Test-Linux.ps1
-	Invoke-Linux		-  Run Bash script on multiple hosts simultaneously with Posh-SSH
 ### Invoke-Stager.ps1
 	Invoke-Stager		-  Example how to use -ScriptPath or -URL with Test-Windows.ps1 function
 ### bloodhoundanalytics.py
