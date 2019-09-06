@@ -2078,7 +2078,7 @@ namespace PingCastle.Scanners
 	    }
         return $list
     }
-    function local:Get-EternalBlueStatus{
+    function local:Get-EternalBlueStatus {
         Param(
             [parameter(Mandatory=$true,ValueFromPipeline=$true)]
             $ComputerNames
@@ -2314,15 +2314,17 @@ namespace PingCastle.Scanners
         Add-Type -TypeDefinition $Source
         $list = New-Object System.Collections.ArrayList
 	    $ComputerNames | foreach {
-	    	$data = New-Object  PSObject -Property @{
-	    		"ComputerName" = $_
-	    		"Status"       = [PingCastle.Scanners.ms17_010scanner]::ScanForMs17_010($_)
-	    	}
-	    	$list.add($data) | Out-Null
+            try{
+	    	    $data = New-Object  PSObject -Property @{
+	    	    	"ComputerName" = $_
+	    	    	"Status"       = [PingCastle.Scanners.ms17_010scanner]::ScanForMs17_010($_)
+                }
+                $list.add($data) | Out-Null
+            }catch{}
 	    }
         return $list
     }
-    function local:Get-AntiVirusStatus{
+    function local:Get-AntiVirusStatus {
         Param(
             [parameter(Mandatory=$true,ValueFromPipeline=$true)]
             $ComputerNames
@@ -2515,15 +2517,11 @@ namespace PingCastle
         Add-Type -TypeDefinition $Source
         $list = New-Object System.Collections.ArrayList
         $ComputerNames | foreach {
-            $data = New-Object  PSObject -Property @{
-                "ComputerName" = $_
-                "Status"       = [PingCastle.TestAV]::RunTestAV($_)
-            }
-            $list.add($data) | Out-Null
+            Write-Host "$_ " -NoNewline 
+            [PingCastle.TestAV]::RunTestAV($_)
         }
-        return $list
     }
-    function local:Get-NullSession{
+    function local:Get-NullSession {
         Param(
             [parameter(Mandatory=$true,ValueFromPipeline=$true)]
             $ComputerNames
@@ -2542,6 +2540,16 @@ namespace PingCastle
         }
         return $list
     }
+    Write-Output "`n[*] Spool Status"
+    Get-SpoolStatus -ComputerNames $ComputerNames
+    Write-Output "`n[*] SMBv1 Status"
+    Get-SMBv1Status -ComputerNames $ComputerNames
+    Write-Output "`n[*] EternalBlue"
+    Get-EternalBlueStatus -ComputerNames $ComputerNames
+    Write-Output "`n[*] Antivirus"
+    Get-AntiVirusStatus -ComputerNames $ComputerNames
+    Write-Output "`n[*] NullSession"
+    Get-NullSession -ComputerNames $ComputerNames
 }
 #Invoke-NetEnum -ComputerNames .\computer.txt
 #(Get-DomainComputer).displayname | Invoke-NetEnum
