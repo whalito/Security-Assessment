@@ -35,7 +35,12 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 	Invoke-LinuxSSH		-  Run Bash script on multiple hosts simultaneously with Posh-SSH
 	Invoke-WindowsWMI	-  Run PowerShell script on multiple hosts simultaneously with WMI
 	Invoke-WindowsPS	-  Run PowerShell script on multiple hosts simultaneously with PSRemote
-	Invoke-NetEnum		-  C# scripts from pingcastle (thx vletoux)
+	Invoke-NetEnum		-  Mostly C# scripts from pingcastle (thx vletoux)
+* Spooler Status
+* SMBv1
+* EternalBlue
+* Antivirus
+* SMB NullSession
 	Invoke-DomainEnum	-  Runs simple checks on the domain
 * Domain and Forest Trust
 * CPassword in Sysvol
