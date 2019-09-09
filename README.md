@@ -46,11 +46,8 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * CA templates
 * Null Session on DCs
 * BloodHound
-### Invoke-Stager.ps1
-	Invoke-Stager		-  Example how to use -ScriptPath or -URL with Test-Windows.ps1 function
 ### bloodhoundanalytics.py
 	Gather Active Directory statistics from BloodHound data
-
 # Software
 
 https://docs.microsoft.com/en-us/windows/security/threat-protection/security-compliance-toolkit-10
