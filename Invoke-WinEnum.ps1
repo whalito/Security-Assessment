@@ -31,9 +31,6 @@ function Get-SysInfo {
     .SYNOPSIS
     Get basic system information from the host
     #>
-    #if($PSVersionTable.PSVersion.ToString() -gt 5){
-    #    1
-    #}
     $os_info = Get-WmiObject Win32_OperatingSystem
     $date = Get-Date
     if(($os_info.producttype) -eq 1){
@@ -166,23 +163,25 @@ function Get-LocalSecurityProducts {
     try {  
         $firewalls= @(Get-WmiObject -Namespace $securityCenterNS -class FirewallProduct)
         if($firewalls.Count -eq 0){
-	        $SecInfoHash.Add("FW from third party?", $false)
+	        Write-Output "`n[-] FW from third party not installed"
         }else{
-            $SecInfoHash.Add("FW from third party?", $true)
-            # The structure of the API is different depending on the version of the SecurityCenter Namespace
-            if($securityCenterNS.endswith("2")){
-                [int]$productState=$firewalls.ProductState
-        	    $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
-                $provider=$hexString.substring(0,2)
-                $realTimeProtec=$hexString.substring(2,2)
-                $definition=$hexString.substring(4,2)
-                $SecInfoHash.Add("FW Product Name", ($firewalls.displayName -join ', '))
-                $SecInfoHash.Add("FW Service Type", ($SecurityProvider[[String]$provider]))
-                $SecInfoHash.Add("FW State       ", ($RealTimeBehavior[[String]$realTimeProtec]))
-            }else{
-                $SecInfoHash.Add("FW Company Name", ($firewalls.CompanyName -join ', '))
-                $SecInfoHash.Add("FW Product Name", ($firewalls.displayName -join ', '))
-                $SecInfoHash.Add("FW State       ", ($firewalls.enabled -join ', '))
+            Write-Output "`n[+] FW from third party installed"
+            $firewalls | foreach {
+                # The structure of the API is different depending on the version of the SecurityCenter Namespace
+                if($securityCenterNS.endswith("2")){
+                    [int]$productState=$_.ProductState
+        	        $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
+                    $provider=$hexString.substring(0,2)
+                    $realTimeProtec=$hexString.substring(2,2)
+                    $definition=$hexString.substring(4,2)
+                    Write-Output "FW Product Name $($_.displayName)"
+                    Write-Output "FW Service Type $($SecurityProvider[[String]$provider])"
+                    Write-Output "FW State        $($RealTimeBehavior[[String]$realTimeProtec])"
+                }else{
+                    Write-Output "FW Company Name $($_.CompanyName)"
+                    Write-Output "FW Product Name $($_.displayName)"
+                    Write-Output "FW State        $($_.enabled)"
+                }
             }
         }
     }
@@ -194,24 +193,29 @@ function Get-LocalSecurityProducts {
         # checks for antivirus products
         $antivirus=@(Get-WmiObject -Namespace $securityCenterNS -class AntiVirusProduct)
         if($antivirus.Count -eq 0){
-            $SecInfoHash.Add("AntiVirus installed?", $false)
+            Write-Output "`n[-] AntiVirus not installed"
         }else{
-            $SecInfoHash.Add("AntiVirus installed?", $true)
-            if($securityCenterNS.endswith("2")){
-             	[int]$productState=$_.ProductState
-                $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
-                $provider=$hexString.substring(0,2)
-                $realTimeProtec=$hexString.substring(2,2)
-                $definition=$hexString.substring(4,2)
-                $SecInfoHash.Add("AV Product Name         ", ($antivirus.displayname -join ', '))
-                $SecInfoHash.Add("AV Service Type         ", ($SecurityProvider[[String]$provider]))
-                $SecInfoHash.Add("AV Real Time Protection ", ($RealTimeBehavior[[String]$realTimeProtec]))
-                $SecInfoHash.Add("AV Signature Definitions", ($DefinitionStatus[[String]$definition]))
-            }else{
-                $SecInfoHash.Add("AV Company Name        ", ($antivirus.companyname -join ', '))
-                $SecInfoHash.Add("AV Product Name        ", ($antivirus.displayname -join ', '))
-                $SecInfoHash.Add("AV Real Time Protection", ($antivirus.onAccessScanningEnabled -join ', '))
-                $SecInfoHash.Add("AV Product up-to-date  ", ($antivirus.productUpToDate -join ', '))
+            Write-Output "`n[+] AntiVirus installed"
+            $antivirus | foreach {
+                if($securityCenterNS.endswith("2")){
+                    if($_.displayname -match 'defender'){
+                        $defender=$true
+                    }
+                 	[int]$productState=$_.ProductState
+                    $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
+                    $provider=$hexString.substring(0,2)
+                    $realTimeProtec=$hexString.substring(2,2)
+                    $definition=$hexString.substring(4,2)
+                    Write-Output "AV Product Name         $($_.displayname)"
+                    Write-Output "AV Service Type         $($SecurityProvider[[String]$provider])"
+                    Write-Output "AV Real Time Protection $($RealTimeBehavior[[String]$realTimeProtec])"
+                    Write-Output "AV Signature Definition $($DefinitionStatus[[String]$definition])"
+                }else{
+                    Write-Output "AV Company Name         $($_.companyname)"
+                    Write-Output "AV Product Name         $($_.displayname)"
+                    Write-Output "AV Real Time Protection $($_.onAccessScanningEnabled)"
+                    Write-Output "AV Product up-to-date   $($_.productUpToDate)"
+                }
             }
         }
     }catch{
@@ -223,37 +227,37 @@ function Get-LocalSecurityProducts {
 	    #Write-Output "`n[*] Checking for installed antispyware products" 
         $antispyware=@(Get-WmiObject -Namespace $securityCenterNS -class AntiSpywareProduct)
         if($antispyware.Count -eq 0){
-            $SecInfoHash.Add("AntiSpyware installed?", $false)     
+            Write-Output "`n[-] AntiSpyware not installed"
         }else{ 
-            $SecInfoHash.Add("AntiSpyware installed?", $true)   
-		    if($securityCenterNS.endswith("2")){
-                [int]$productState=$_.ProductState
-                $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
-                $provider=$hexString.substring(0,2)
-                $realTimeProtec=$hexString.substring(2,2)
-                $definition=$hexString.substring(4,2)
-                $SecInfoHash.Add("Spyware Product Name         ", ($antispyware.displayName -join ', '))
-                $SecInfoHash.Add("Spyware Service Type         ", ($SecurityProvider[[String]$provider]))
-                $SecInfoHash.Add("Spyware Real Time Protection ", ($RealTimeBehavior[[String]$realTimeProtec]))
-                $SecInfoHash.Add("Spyware Signature Definitions", ($DefinitionStatus[[String]$definition]))
-            }else{
-                $SecInfoHash.Add("Spyware Company Name         ", ($antispyware.CompanyName -join ', ')) 
-                $SecInfoHash.Add("Spyware Product Name         ", ($antispyware.displayName -join ', '))
-                $SecInfoHash.Add("Spyware Real Time Protection ", ($antispyware.onAccessScanningEnabled -join ', '))
-                $SecInfoHash.Add("Spyware Product up-to-date   ", ($antispyware.productUpToDate -join ', '))
+            Write-Output "`n[+] AntiSpyware installed"
+            $antispyware | foreach{
+		        if($securityCenterNS.endswith("2")){
+                    [int]$productState=$_.ProductState
+                    $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
+                    $provider=$hexString.substring(0,2)
+                    $realTimeProtec=$hexString.substring(2,2)
+                    $definition=$hexString.substring(4,2)
+                    Write-Output "Spyware Product Name          $($_.displayName)"
+                    Write-Output "Spyware Service Type          $($SecurityProvider[[String]$provider])"
+                    Write-Output "Spyware Real Time Protection  $($RealTimeBehavior[[String]$realTimeProtec])"
+                    Write-Output "Spyware Signature Definitions $($DefinitionStatus[[String]$definition])"
+                }else{
+                    Write-Output "Spyware Company Name          $($_.CompanyName)"
+                    Write-Output "Spyware Product Name          $($_.displayName)"
+                    Write-Output "Spyware Real Time Protection  $($_.onAccessScanningEnabled)"
+                    Write-Output "Spyware Product up-to-date    $($_.productUpToDate)"
+                }
             }
         }
     }catch{
         Write-Output '[-] Failed spyware enum'
         Write-Output "[-] $($_.Exception.Message)"
     }
-    $SecObject = New-Object -TypeName PSobject -Property $SecInfoHash
     $OSinfo = (Get-CimInstance -ClassName Win32_OperatingSystem).ProductType
-    if(($SecObject.'AV Product Name         ' -match 'Defender') -and ($OSinfo -gt 1)){
+    if(($defender) -and ($OSinfo -gt 1)){
         Write-Output '[*]Starting Windows Defender enumeration'
         Invoke-DefenderEnum
     }
-    return $SecObject | Select-Object 'Domain Profile Firewall','Standard Profile Firewall','Public Profile Firewall','AntiVirus installed?','AV*','AntiSpyware installed?','Spyware*','FW*'
 }
 function Get-ModifiablePath {
     <#
@@ -389,6 +393,9 @@ function Get-ModifiablePath {
             #$CandidatePaths makes the scan from to be 4 seconds to 7.5 seconds
             $TargetPath | Sort-Object -Unique | ForEach-Object {
                 $CandidatePath = $_
+                if (-not(Test-Path $CandidatePath)){
+                    return
+                }
                 Get-Acl -Path $CandidatePath | Select-Object -ExpandProperty Access | Where-Object {($_.AccessControlType -match 'Allow')} | ForEach-Object {
                     $FileSystemRights = $_.FileSystemRights.value__
                     if($SkipUser){
@@ -462,7 +469,7 @@ function Get-ActiveListeners {
     }
     return $list
 }
-function Get-WriteableAutoRuns {
+function Get-WritableAutoRuns {
     <#
     Modified https://github.com/A-mIn3/WINspect
     .SYNOPSIS
@@ -528,8 +535,10 @@ function Get-WriteableAutoRuns {
             [array]$properties = get-item $key | Select-Object -ExpandProperty Property
             if($properties.Count -gt 0){
                 foreach($exe in $properties) {
-                    $path = (Get-ItemProperty $key).$exe.replace('"','')
-                    $pathname = $($path.subString(0, $path.toLower().IndexOf(".exe")+4)).trim('"')
+                    try{
+                        $path = (Get-ItemProperty $key -ErrorAction stop).$exe.replace('"','')
+                        $pathname = $path.subString(0, $path.toLower().IndexOf(".exe")+4).trim('"')
+                    }catch{}
                     if(-not($pathname)){
                         $pathname = $path.split('/')[0]
                     }
@@ -591,7 +600,7 @@ function Get-WritableAdminPath {
 	    }
     }
     if($list.Count -eq 0){
-        return "[+] Non Writeable Admin Path Found"
+        return "[+] Non Writable Admin Path Found"
     }else{
         return $list
     }
@@ -601,7 +610,7 @@ function Get-WritableServices {
     .SYNOPSIS
     Gets services binaries and folders with permission  
     .DESCRIPTION
-    This function checks services that have writable binaries and folders,
+    This function checks services that have Writable binaries and folders,
     returns an array containing service objects.
     #>
     param(
@@ -616,30 +625,34 @@ function Get-WritableServices {
         }
         if(($pathname) -and (Test-Path $pathname)){
             #File acl
-            $fileacl = Get-ModifiablePath -Path $pathname -SkipUser $SkipUser
+            try{
+                $fileacl = Get-ModifiablePath -Path $pathname -SkipUser $SkipUser
+            }catch{}
             if($fileacl){
                 $list.Add($fileacl) | Out-Null
             }
             #Dir acl
-            $dir = (Get-ChildItem $pathname).DirectoryName
-            $diracl = Get-ModifiablePath -Path $dir -SkipUser $SkipUser
-            if($diracl){
+            try{
+                $dir = (Get-ChildItem $pathname).DirectoryName
+            }catch{}
+            if($dir){
+                $diracl = Get-ModifiablePath -Path $dir -SkipUser $SkipUser
                 $list.Add($diracl) | Out-Null
             }
         }
     }
     if($list.Count -eq 0){
-        return "[+] Non Writeable Service Path Found"
+        return "[+] Non Writable Service Path Found"
     }else{
         return $list
     }
 }
-function Get-WriteableScheduledTasks {
+function Get-WritableScheduledTasks {
     <#
     .SYNOPSIS
     Gets scheduled tasks binaries and folders with permission  
     .DESCRIPTION
-    This function looks for scheduled tasks that have writeable binaries and folders
+    This function looks for scheduled tasks that have Writable binaries and folders
     .NOTE
     This functions uses the schtasks.exe utility to get informations about
     scheduled task and then tries to parse the results. Here I choose to parse XML output from the command.
@@ -654,20 +667,24 @@ function Get-WriteableScheduledTasks {
         $pathname = [System.Environment]::ExpandEnvironmentVariables($task.actions.exec.command).trim()
         if(($pathname) -and (Test-Path $pathname)){
             #File acl
+            try{
             $fileacl = Get-ModifiablePath -Path $pathname -SkipUser $SkipUser
+            }catch{}
             if($fileacl){
                 $list.Add($fileacl) | Out-Null
             }
             #Dir acl
-            $dir = (Get-ChildItem $pathname).DirectoryName
+            try{
+            $dir = (Get-ChildItem $pathname -ErrorAction stop).DirectoryName
             $diracl = Get-ModifiablePath -Path $dir -SkipUser $SkipUser
+            }catch{}
             if($diracl){
                 $list.Add($diracl) | Out-Null
             }
         }
     }
     if($list.Count -eq 0){
-        return "[+] Non Writeable Scheduled Task Path Found"
+        return "[+] Non Writable Scheduled Task Path Found"
     }else{
         return $list
     }
@@ -1029,7 +1046,9 @@ function Get-UnquotedService {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '')]
     [OutputType('PowerUp.UnquotedService')]
     [CmdletBinding()]
-    Param()
+    Param(
+        [string[]]$SkipUser
+    )
     # find all paths to service .exe's that have a space in the path and aren't quoted
     $VulnServices = Get-WmiObject -Class win32_service | Where-Object {
         $_ -and ($Null -ne $_.pathname) -and ($_.pathname.Trim() -ne '') -and (-not $_.pathname.StartsWith("`"")) -and (-not $_.pathname.StartsWith("'")) -and ($_.pathname.Substring(0, $_.pathname.ToLower().IndexOf('.exe') + 4)) -match '.* .*'
@@ -1041,17 +1060,16 @@ function Get-UnquotedService {
             for ($i=0;$i -lt $SplitPathArray.Count; $i++) {
                         $ConcatPathArray += $SplitPathArray[0..$i] -join ' '
             }
-            $ModifiableFiles = $ConcatPathArray | Get-ModifiablePath
+            $ModifiableFiles = $ConcatPathArray | Get-ModifiablePath -SkipUser $SkipUser
             $ModifiableFiles | Where-Object {$_ -and $_.ModifiablePath -and ($_.ModifiablePath -ne '')} | Foreach-Object {
-                $CanRestart = Test-ServiceDaclPermission -PermissionSet 'Restart' -Name $Service.name
                 $Out = New-Object PSObject
                 $Out | Add-Member Noteproperty 'ServiceName' $Service.name
                 $Out | Add-Member Noteproperty 'Path' $Service.pathname
                 $Out | Add-Member Noteproperty 'ModifiablePath' $_
                 $Out | Add-Member Noteproperty 'StartName' $Service.startname
                 $Out | Add-Member Noteproperty 'AbuseFunction' "Write-ServiceBinary -Name '$($Service.name)' -Path <HijackPath>"
-                $Out | Add-Member Noteproperty 'CanRestart' ([Bool]$CanRestart)
                 $Out | Add-Member Aliasproperty Name ServiceName
+                $Out | Add-Member Noteproperty 'Trustee' $_.IdentityReference
                 $Out.PSObject.TypeNames.Insert(0, 'PowerUp.UnquotedService')
                 $Out
             }
@@ -1573,10 +1591,14 @@ function Invoke-WinEnum {
     #Get Local admins for acl checking
     $LocalAdmins = Get-LocalAdministrators
     $Admins = @(
-        'System',
-        'TrustedInstaller',
-        'CREATOR OWNER',
+        'System'
+        'TrustedInstaller'
+        'CREATOR OWNER'
+        'Skapare ägare'
+        'ägare'
+        'skapare'
         'Administrators'
+        'Administratörer'
         $LocalAdmins.name
     )
 
@@ -1641,7 +1663,7 @@ function Invoke-WinEnum {
     #https://powersploit.readthedocs.io/en/latest/Privesc/Get-UnquotedService/
     Write-Output "`n[*] Checking Unquoted Services"
     try{
-        $UnquotedService = Get-UnquotedService -ErrorAction Stop
+        $UnquotedService = Get-UnquotedService -ErrorAction Stop -SkipUser $Admins
         if($UnquotedService){
             Write-Output "[-] Unquoted Services Found"
             $UnquotedService
@@ -1655,10 +1677,10 @@ function Invoke-WinEnum {
     #https://powersploit.readthedocs.io/en/latest/Privesc/Get-RegistryAlwaysInstallElevated/
     Write-Output "`n[*] Checking AlwaysInstallElevated"
     try{
-        $UnquotedService = Get-RegistryAlwaysInstallElevated -ErrorAction Stop
-        if($UnquotedService){
+        $AlwaysInstallElevated = Get-RegistryAlwaysInstallElevated -ErrorAction Stop
+        if($AlwaysInstallElevated){
             Write-Output "[-] AlwaysInstallElevated Found"
-            $UnquotedService
+            $AlwaysInstallElevated
         }else{
             Write-Output "[+] No AlwaysInstallElevated Found"
         }
@@ -1685,7 +1707,7 @@ function Invoke-WinEnum {
     #
     Write-Output "`n[*] Checking ACL's on Possible High Privileged Scheduled Tasks Binaries and Folders"
     try{
-        Get-WriteableScheduledTasks -SkipUser $Admins
+        Get-WritableScheduledTasks -SkipUser $Admins
     }catch{
         Write-Output "[-] Checking Possible High Integrity Scheduled Tasks Failed"
     }
@@ -1709,7 +1731,7 @@ function Invoke-WinEnum {
     #
     Write-Output "`n[*] Checking ACL's on AutoRuns Binaries and Folders"
     try{
-        Get-WriteableAutoRuns -SkipUser $Admins
+        Get-WritableAutoRuns -SkipUser $Admins
     }catch{
         "[-] Checking AutoRuns Failed"
     }
@@ -1728,5 +1750,4 @@ function Invoke-WinEnum {
     Write-Output "Scan took $($timer.Elapsed.TotalSeconds) Seconds"
     $timer.Stop()
 }
-
 #Invoke-WinEnum
