@@ -1,25 +1,25 @@
 function Get-LocalAdministrators {
     $group = get-wmiobject win32_group -ComputerName $env:COMPUTERNAME -Filter "LocalAccount=True AND SID='S-1-5-32-544'"
     $query = "GroupComponent = `"Win32_Group.Domain='$($group.domain)'`,Name='$($group.name)'`""
-    $list = Get-WmiObject win32_groupuser -Filter $query | foreach {[wmi]$_.PartComponent} 
+    $list = Get-WmiObject win32_groupuser -Filter $query | foreach {try{[wmi]$_.PartComponent}catch{}} 
     return $list 
 }
 function Get-LocalPSRemote {
     $group = get-wmiobject win32_group -ComputerName $env:COMPUTERNAME -Filter "LocalAccount=True AND SID='S-1-5-32-580'"
     $query = "GroupComponent = `"Win32_Group.Domain='$($group.domain)'`,Name='$($group.name)'`""
-    $list = Get-WmiObject win32_groupuser -Filter $query | foreach {[wmi]$_.PartComponent} 
+    $list = Get-WmiObject win32_groupuser -Filter $query | foreach {try{[wmi]$_.PartComponent}catch{}} 
     return $list 
 }
 function Get-LocalRDP {
     $group = get-wmiobject win32_group -ComputerName $env:COMPUTERNAME -Filter "LocalAccount=True AND SID='S-1-5-32-555'"
     $query = "GroupComponent = `"Win32_Group.Domain='$($group.domain)'`,Name='$($group.name)'`""
-    $list = Get-WmiObject win32_groupuser -Filter $query | foreach {[wmi]$_.PartComponent} 
+    $list = Get-WmiObject win32_groupuser -Filter $query | foreach {try{[wmi]$_.PartComponent}catch{}} 
     return $list 
 }
 function Get-LocalDCOM {
     $group = get-wmiobject win32_group -ComputerName $env:COMPUTERNAME -Filter "LocalAccount=True AND SID='S-1-5-32-562'"
     $query = "GroupComponent = `"Win32_Group.Domain='$($group.domain)'`,Name='$($group.name)'`""
-    $list = Get-WmiObject win32_groupuser -Filter $query | foreach {[wmi]$_.PartComponent} 
+    $list = Get-WmiObject win32_groupuser -Filter $query | foreach {try{[wmi]$_.PartComponent}catch{}} 
     return $list 
 }
 function Get-LocalPasswordNotRequired {
@@ -31,8 +31,16 @@ function Get-SysInfo {
     .SYNOPSIS
     Get basic system information from the host
     #>
+    #if($PSVersionTable.PSVersion.ToString() -gt 5){
+    #    1
+    #}
     $os_info = Get-WmiObject Win32_OperatingSystem
     $date = Get-Date
+    if(($os_info.producttype) -eq 1){
+        $psv2 = $((Get-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2).state)
+    }elseif(($os_info.producttype) -gt 1){
+        $psv2 = $((Get-WindowsFeature PowerShell-V2 -ErrorAction SilentlyContinue).InstallState)
+    }
     $SysInfoHash = @{            
         HostName                = $ENV:COMPUTERNAME                         
         IPAddresses             = (@([System.Net.Dns]::GetHostAddresses($ENV:HOSTNAME)) | %{$_.IPAddressToString}) -join ", "        
@@ -46,6 +54,7 @@ function Get-SysInfo {
         LogonServer             = $ENV:LOGONSERVER
         DotNetVersion           = ((Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\*').PSChildName -join ', ')
         PSVersion               = $PSVersionTable.PSVersion.ToString()
+        "Powershell v2"         = $psv2
         PSCompatibleVersions    = ($PSVersionTable.PSCompatibleVersions) -join ', '
         PSScriptBlockLogging    = If((Get-ItemProperty HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging -EA 0).EnableScriptBlockLogging -eq 1){"Enabled"} Else {"Disabled"}
         PSTranscription         = If((Get-ItemProperty HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\Transcription -EA 0).EnableTranscripting -eq 1){"Enabled"} Else {"Disabled"}
@@ -65,7 +74,7 @@ function Get-SysInfo {
     }      
     # PS feels the need to randomly re-order everything when converted to an object so let's presort
     $SysInfoObject = New-Object -TypeName PSobject -Property $SysInfoHash 
-    return $SysInfoObject | Select-Object Hostname, OS, Architecture, "Date(UTC)", "Date(Local)", InstallDate, IPAddresses, Domain, Username, LogonServer, DotNetVersion, PSVersion, PSCompatibleVersions, PSScriptBlockLogging, PSTranscription, PSTranscriptionDir, PSModuleLogging, LSASSProtection, LAPS, UACLocalAccountTokenFilterPolicy, UACFilterAdministratorToken, DENYRDPCONNECTIONS, LOCALADMINS,LocalPSRemote,LocalDCOM,LocalRDP,LocalPasswordNotReq, SMBv1    
+    return $SysInfoObject | Select-Object Hostname, OS, Architecture, "Date(UTC)", "Date(Local)", InstallDate, IPAddresses, Domain, Username, LogonServer, DotNetVersion, PSVersion, PSCompatibleVersions, PSScriptBlockLogging, PSTranscription, PSTranscriptionDir, PSModuleLogging, "Powershell v2", LSASSProtection, LAPS, UACLocalAccountTokenFilterPolicy, UACFilterAdministratorToken, DENYRDPCONNECTIONS, LOCALADMINS,LocalPSRemote,LocalDCOM,LocalRDP,LocalPasswordNotReq, SMBv1    
 }
 function Get-LocalSecurityProducts {
     <#
@@ -154,57 +163,62 @@ function Get-LocalSecurityProducts {
         $securityCenterNS="root\SecurityCenter"
     }       
     # checks for third party firewall products 
-    #Write-Output "`n[*] Checking for third party Firewall products" 
     try {  
         $firewalls= @(Get-WmiObject -Namespace $securityCenterNS -class FirewallProduct)
         if($firewalls.Count -eq 0){
 	        $SecInfoHash.Add("FW from third party?", $false)
         }else{
-            $firewalls| foreach {
-                $SecInfoHash.Add("FW from third party?", $true)
-                # The structure of the API is different depending on the version of the SecurityCenter Namespace
-                if($securityCenterNS.endswith("2")){
-                    [int]$productState=$_.ProductState
-            	    $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
-                    $provider=$hexString.substring(0,2)
-                    $realTimeProtec=$hexString.substring(2,2)
-                    $definition=$hexString.substring(4,2)
-                    $SecInfoHash.Add("FW Product Name", $($_.displayName))
-                    $SecInfoHash.Add("FW Service Type", $($SecurityProvider[[String]$provider]))
-                    $SecInfoHash.Add("FW State       ", $($RealTimeBehavior[[String]$realTimeProtec]))
-                }else{
-                    $SecInfoHash.Add("FW Company Name", $($_.CompanyName))
-                    $SecInfoHash.Add("FW Product Name", $($_.displayName))
-                    $SecInfoHash.Add("FW State       ", $($_.enabled))
-                }
+            $SecInfoHash.Add("FW from third party?", $true)
+            # The structure of the API is different depending on the version of the SecurityCenter Namespace
+            if($securityCenterNS.endswith("2")){
+                [int]$productState=$firewalls.ProductState
+        	    $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
+                $provider=$hexString.substring(0,2)
+                $realTimeProtec=$hexString.substring(2,2)
+                $definition=$hexString.substring(4,2)
+                $SecInfoHash.Add("FW Product Name", ($firewalls.displayName -join ', '))
+                $SecInfoHash.Add("FW Service Type", ($SecurityProvider[[String]$provider]))
+                $SecInfoHash.Add("FW State       ", ($RealTimeBehavior[[String]$realTimeProtec]))
+            }else{
+                $SecInfoHash.Add("FW Company Name", ($firewalls.CompanyName -join ', '))
+                $SecInfoHash.Add("FW Product Name", ($firewalls.displayName -join ', '))
+                $SecInfoHash.Add("FW State       ", ($firewalls.enabled -join ', '))
             }
         }
+    }
+    catch{
+        Write-Output '[-] Failed firewall enum'
+        Write-Output "[-] $($_.Exception.Message)"
+    }
+    try{
         # checks for antivirus products
-        #Write-Output "`n[*] Checking for installed antivirus products" 
         $antivirus=@(Get-WmiObject -Namespace $securityCenterNS -class AntiVirusProduct)
         if($antivirus.Count -eq 0){
             $SecInfoHash.Add("AntiVirus installed?", $false)
         }else{
             $SecInfoHash.Add("AntiVirus installed?", $true)
-        	$antivirus| foreach {
-                if($securityCenterNS.endswith("2")){
-                 	[int]$productState=$_.ProductState
-                    $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
-                    $provider=$hexString.substring(0,2)
-                    $realTimeProtec=$hexString.substring(2,2)
-                    $definition=$hexString.substring(4,2)
-                    $SecInfoHash.Add("AV Product Name         ",$($_.displayName))
-                    $SecInfoHash.Add("AV Service Type         ",$($SecurityProvider[[String]$provider]))
-                    $SecInfoHash.Add("AV Real Time Protection ",$($RealTimeBehavior[[String]$realTimeProtec]))
-                    $SecInfoHash.Add("AV Signature Definitions",$($DefinitionStatus[[String]$definition]))
-                }else{
-                    $SecInfoHash.Add("AV Company Name        ",$($_.CompanyName))
-                    $SecInfoHash.Add("AV Product Name        ",$($_.displayName))
-                    $SecInfoHash.Add("AV Real Time Protection",$($_.onAccessScanningEnabled))
-                    $SecInfoHash.Add("AV Product up-to-date  ",$($_.productUpToDate))
-                }
+            if($securityCenterNS.endswith("2")){
+             	[int]$productState=$_.ProductState
+                $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
+                $provider=$hexString.substring(0,2)
+                $realTimeProtec=$hexString.substring(2,2)
+                $definition=$hexString.substring(4,2)
+                $SecInfoHash.Add("AV Product Name         ", ($antivirus.displayname -join ', '))
+                $SecInfoHash.Add("AV Service Type         ", ($SecurityProvider[[String]$provider]))
+                $SecInfoHash.Add("AV Real Time Protection ", ($RealTimeBehavior[[String]$realTimeProtec]))
+                $SecInfoHash.Add("AV Signature Definitions", ($DefinitionStatus[[String]$definition]))
+            }else{
+                $SecInfoHash.Add("AV Company Name        ", ($antivirus.companyname -join ', '))
+                $SecInfoHash.Add("AV Product Name        ", ($antivirus.displayname -join ', '))
+                $SecInfoHash.Add("AV Real Time Protection", ($antivirus.onAccessScanningEnabled -join ', '))
+                $SecInfoHash.Add("AV Product up-to-date  ", ($antivirus.productUpToDate -join ', '))
             }
         }
+    }catch{
+        Write-Output '[-] Failed AV enum'
+        Write-Output "[-] $($_.Exception.Message)"
+    }
+    try{
         # Checks for antispyware products
 	    #Write-Output "`n[*] Checking for installed antispyware products" 
         $antispyware=@(Get-WmiObject -Namespace $securityCenterNS -class AntiSpywareProduct)
@@ -212,29 +226,33 @@ function Get-LocalSecurityProducts {
             $SecInfoHash.Add("AntiSpyware installed?", $false)     
         }else{ 
             $SecInfoHash.Add("AntiSpyware installed?", $true)   
-            $antispyware| foreach {
-		        if($securityCenterNS.endswith("2")){
-                    [int]$productState=$_.ProductState
-                    $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
-                    $provider=$hexString.substring(0,2)
-                    $realTimeProtec=$hexString.substring(2,2)
-                    $definition=$hexString.substring(4,2)
-                    $SecInfoHash.Add("Spyware Product Name         ", $($_.displayName))
-                    $SecInfoHash.Add("Spyware Service Type         ", $($SecurityProvider[[String]$provider]))
-                    $SecInfoHash.Add("Spyware Real Time Protection ", $($RealTimeBehavior[[String]$realTimeProtec]))
-                    $SecInfoHash.Add("Spyware Signature Definitions", $($DefinitionStatus[[String]$definition]))
-                }else{
-                    $SecInfoHash.Add("Spyware Company Name         ", $($_.CompanyName)) 
-                    $SecInfoHash.Add("Spyware Product Name         ", $($_.displayName))
-                    $SecInfoHash.Add("Spyware Real Time Protection ", $($_.onAccessScanningEnabled))
-                    $SecInfoHash.Add("Spyware Product up-to-date   ", $($_.productUpToDate))
-                }
+		    if($securityCenterNS.endswith("2")){
+                [int]$productState=$_.ProductState
+                $hexString=[System.Convert]::toString($productState,16).padleft(6,'0')
+                $provider=$hexString.substring(0,2)
+                $realTimeProtec=$hexString.substring(2,2)
+                $definition=$hexString.substring(4,2)
+                $SecInfoHash.Add("Spyware Product Name         ", ($antispyware.displayName -join ', '))
+                $SecInfoHash.Add("Spyware Service Type         ", ($SecurityProvider[[String]$provider]))
+                $SecInfoHash.Add("Spyware Real Time Protection ", ($RealTimeBehavior[[String]$realTimeProtec]))
+                $SecInfoHash.Add("Spyware Signature Definitions", ($DefinitionStatus[[String]$definition]))
+            }else{
+                $SecInfoHash.Add("Spyware Company Name         ", ($antispyware.CompanyName -join ', ')) 
+                $SecInfoHash.Add("Spyware Product Name         ", ($antispyware.displayName -join ', '))
+                $SecInfoHash.Add("Spyware Real Time Protection ", ($antispyware.onAccessScanningEnabled -join ', '))
+                $SecInfoHash.Add("Spyware Product up-to-date   ", ($antispyware.productUpToDate -join ', '))
             }
         }
     }catch{
+        Write-Output '[-] Failed spyware enum'
         Write-Output "[-] $($_.Exception.Message)"
     }
     $SecObject = New-Object -TypeName PSobject -Property $SecInfoHash
+    $OSinfo = (Get-CimInstance -ClassName Win32_OperatingSystem).ProductType
+    if(($SecObject.'AV Product Name         ' -match 'Defender') -and ($OSinfo -gt 1)){
+        Write-Output '[*]Starting Windows Defender enumeration'
+        Invoke-DefenderEnum
+    }
     return $SecObject | Select-Object 'Domain Profile Firewall','Standard Profile Firewall','Public Profile Firewall','AntiVirus installed?','AV*','AntiSpyware installed?','Spyware*','FW*'
 }
 function Get-ModifiablePath {
@@ -1513,8 +1531,9 @@ function Invoke-HostEnum {
             }
         }
     }
-    if(Test-Path "HKLM:\SOFTWARE\Microsoft\InetStp\"){
-        Write-Output "[*] Starting IIS testing"
+    $iis = Get-WmiObject -Class Win32_Service  -Filter "Name='W3svc'"
+    if($iis){
+        Write-Output "`n[*] Starting IIS testing"
         #https://powersploit.readthedocs.io/en/latest/Privesc/Get-WebConfig/
         Write-Output "[*] Checking WebConfig"
         try{
@@ -1542,20 +1561,10 @@ function Invoke-HostEnum {
             Write-Output "[-] ApplicationHost Failed"
         }
     }
-    Write-Output "[*] Print Spooler Status"
+    Write-Output "`n[*] Print Spool Status"
     (Get-WmiObject -Class Win32_Service  -Filter "Name='Spooler'" | Format-Table Name,DisplayName,Status,State,StartMode)
     Write-Output "[*] Checking WinHttpAutoProxySvc Status"
     (Get-WmiObject -Class Win32_Service  -Filter "Name='WinHttpAutoProxySvc'" | Format-Table Name,DisplayName,Status,State,StartMode)
-    $OSinfo = (Get-CimInstance -ClassName Win32_OperatingSystem).ProductType
-    if($OSinfo -eq 1){
-        Write-Output "[*] Starting Workstation testing"
-        Write-Output "[*] PowerShell Version 2: $((Get-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2).state)"
-    }else{
-        Write-Output "[*] Starting Server testing"
-        Write-Output "[*] Starting Windows Defender Audit"
-        Invoke-DefenderEnum
-        Write-Output "[*] PowerShell Version 2: $((Get-WindowsFeature PowerShell-V2 -ErrorAction SilentlyContinue).InstallState)"
-    }
 }
 function Invoke-WinEnum {
     #Start timer

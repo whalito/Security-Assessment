@@ -1,5 +1,11 @@
 function Invoke-WindowsWMI{
-    #Todo: Add support for local scripts
+    <#
+    Install-Module -Name PoshRSJob -Force
+    Too big scripts will not work with ScriptPath
+
+    Invoke-WindowsWMI -Url 'http://10.10.10.123/WinEnum.ps1'
+    Invoke-WindowsWMI -ScriptPath 'invoke-stager.ps1'
+    #>
     param (
         [Parameter(Position=0,ValueFromPipeline=$True)]
         $Computers = ".\windows.txt",
@@ -9,8 +15,6 @@ function Invoke-WindowsWMI{
         
         [string]$Url
     )
-    #Install-Module -Name PoshRSJob -Force
-    #Too big scripts will not work with ScriptPath
     function local:Invoke-WMIExec{
         <#        
             .SYNOPSIS
@@ -150,7 +154,7 @@ function Invoke-WindowsWMI{
     }
     #Import dependencies
     try{
-        Import-Module PoshRSJob
+        Import-Module PoshRSJob -ErrorAction Stop
     }catch{
         Write-Output "[-] $($_.Exception.Message)"
         return
@@ -197,10 +201,14 @@ function Invoke-WindowsWMI{
         Write-Output $errors
     }
 }
-#Invoke-WindowsWMI -Url 'https://raw.githubusercontent.com/cube0x0/Security-Assessment/master/Testing/chaps.ps1'
-#Invoke-WindowsWMI -ScriptPath 'invoke-stager.ps1'
-
 function Invoke-WindowsPS{
+    <#
+    Install-Module -Name PoshRSJob -Force
+    Too big scripts will not work with ScriptPath
+
+    Invoke-WindowsPS -Url 'http://10.10.10.123/WinEnum.ps1'
+    Invoke-WindowsPS -ScriptPath 'invoke-stager.ps1'
+    #>
     param (
         [Parameter(Position=0,ValueFromPipeline=$True)]
         $Computers = ".\windows.txt",
@@ -215,8 +223,6 @@ function Invoke-WindowsPS{
 
         [bool]$UseSSL = $False
     )
-    #Install-Module -Name PoshRSJob -Force
-    #Too big scripts will not work with ScriptPath
     #Import ComputerNames
     if(Test-Path $Computers){
         $Computers = Get-Content $Computers -ErrorAction Stop
@@ -281,17 +287,19 @@ function Invoke-WindowsPS{
         Write-Output $errors
     }
 }
-#Invoke-WindowsPS -Url 'https://raw.githubusercontent.com/cube0x0/Security-Assessment/master/Testing/chaps.ps1'
-#Invoke-WindowsPS -ScriptPath 'invoke-stager.ps1'
-
 function Invoke-LinuxSSH{
-    #import-csv linux.csv
-    #ComputerName Username Password
-    #------------ -------- --------
-    #192.168.1.40 cube     cube
-    #Generates LinEnum reports for multiple hosts
-    #Install-Module -Name Posh-SSH -Force
-    #Install-Module -Name PoshRSJob -Force
+    <#
+    import-csv linux.csv
+    ComputerName Username Password
+    ------------ -------- --------
+    192.168.1.40 cube     cube
+
+    Invoke-Linux -computers
+    Invoke-linux -computers -script
+
+    Install-Module -Name Posh-SSH -Force
+    Install-Module -Name PoshRSJob -Force
+    #>
     param (
         [Parameter(Position=0,ValueFromPipeline=$True)]
         $Computers = '.\linux.csv',
@@ -358,10 +366,10 @@ function Invoke-LinuxSSH{
             Write-Output $errors
         }
 }
-#Invoke-Linux
-
 function Invoke-DomainEnum{
-    #TODO: Check all dc's for null session
+    <#
+    Invoke-Domain -DomainController 192.168.3.10 -Domain hackme.local
+    #>
     param (
         [string]$DomainController,
         [string]$Domain,
@@ -918,15 +926,32 @@ function Invoke-DomainEnum{
         invoke-bloodhound -collectionmethod all,GPOLocalGroup,LoggedOn -domain $Domain -SkipPing
     }
 }
-#Invoke-Domain -DomainController 192.168.3.10 -Domain hackme.local
-
 function Invoke-NetEnum{
+    <#
+    Invoke-NetEnum -ComputerNames .\computers.txt
+    (Get-DomainComputer).displayname | Invoke-NetEnum
+    #>
     param(
         [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true)]
         $ComputerNames
     )
     if((Test-Path $ComputerNames)){
         $ComputerNames = Get-Content $ComputerNames
+    }
+    @(
+        'PowerView.ps1'
+    ) | foreach {
+        if(-not(Test-Path $PSScriptRoot\$_)){
+            Write-Output "Missing dependencies.. $($_)"
+            $missing=$true
+        }
+    }
+    if($missing){
+        return
+    }
+    . .\PowerView.ps1
+    if(-not($ComputerNames)){
+        $ComputerNames = (Get-DomainComputer).displayname
     }
     Function local:Get-SpoolStatus {
 	<#
@@ -2550,6 +2575,6 @@ namespace PingCastle
     Get-AntiVirusStatus -ComputerNames $ComputerNames
     Write-Output "`n[*] NullSession"
     Get-NullSession -ComputerNames $ComputerNames
+    Write-Output "`n[*] Open SMB shares"
+    Find-DomainShare
 }
-#Invoke-NetEnum -ComputerNames .\computer.txt
-#(Get-DomainComputer).displayname | Invoke-NetEnum
