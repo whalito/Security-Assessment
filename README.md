@@ -35,6 +35,7 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 	Invoke-LinuxSSH		-  Run Bash script on multiple hosts simultaneously with Posh-SSH
 	Invoke-WindowsWMI	-  Run PowerShell script on multiple hosts simultaneously with WMI
 	Invoke-WindowsPS	-  Run PowerShell script on multiple hosts simultaneously with PSRemote
+	Get-RemoteCertificates	-  Download all CA and Root Certificates from a remote host using OpenRemoteBaseKey
 	Invoke-NetEnum		-  Mostly C# scripts from pingcastle (thx vletoux)
 	Invoke-DomainEnum	-  Runs simple checks on the domain
 * Domain and Forest Trust
