@@ -1,3 +1,95 @@
+function Get-RemoteCertificates{
+    <#
+    .SYNOPSIS
+    Author: Cube0x0
+    License: BSD 3-Clause
+
+    .DESCRIPTION
+    Download certificates from remote machine
+
+    .PARAMETER ComputerList
+    List of computernames that should be scanned, use FQDN, IP, ranges or CIDR
+
+    .EXAMPLE
+    Get-RemoteCertificates -ComputerName dc.hackme.local -Output out
+    'desktop-bbrc9rr','192.168.3.10','192.168.3.11' | Get-RemoteCertificates
+    Get-RemoteCertificates -ComputerName desktop-bbrc9rr -Verbose
+    [+] Connected to desktop-bbrc9rr
+    VERBOSE: [*] Sids: .DEFAULT,S-1-5-19,S-1-5-20,S-1-5-21-888311446-1519639889-3643310532-1001,S-1-5-21-888311446-1519639889-3643310532-1001_Classes,S-1-5-18
+    VERBOSE: [+] Writing certificate 90E98BB05040666936B20E23F209B10C3CBC4D96-CA.cer
+    VERBOSE: [+] Writing certificate 417E225037FBFAA4F95761D5AE729E1AEA7E3A42-CA.cer
+    VERBOSE: [+] Writing certificate 7EED6032C9F56387EC734CBBF32BFC14DB6DE0A2-CA.cer
+    VERBOSE: [+] Writing certificate 7FCAC26BCF7B5BF7E68CD99E72F1F25AE16614F3-CA.cer
+    VERBOSE: [+] Writing certificate 83DA05A9886F7658BE73ACF0A4930C0F99B92F01-CA.cer
+    VERBOSE: [+] Writing certificate 8AD5C9987E6F190BD6F5416E2DE44CCD641D8CDA-CA.cer
+    VERBOSE: [+] Writing certificate 8BFE3107712B3C886B1C96AAEC89984914DC9B6B-CA.cer
+    VERBOSE: [+] Writing certificate 905DE119F6A0118CFFBF8B69463EFE5BD0C1D322-CA.cer
+    VERBOSE: [+] Writing certificate F960E82855F1C52C8B162DD93EDA220B3DFF1389-CA.cer
+    VERBOSE: [+] Writing certificate 7FCAC26BCF7B5BF7E68CD99E72F1F25AE16614F3-Root.cer
+    [+] Connected to 192.168.3.10
+    VERBOSE: [*] Sids: .DEFAULT,S-1-5-19,S-1-5-20,S-1-5-18
+    [-] Could not open hive
+    #>
+    [cmdletbinding()]
+    param(
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
+        $ComputerName,
+        
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Position=1)]
+        [string]
+        $Output = "$(Get-Location)/output"
+    )
+    begin{
+        if(-not(Test-Path $Output)){
+            New-Item -ItemType Directory -ErrorAction SilentlyContinue $Output | Out-Null
+        }
+    }
+    process{
+        $up=Test-Connection $ComputerName -Count 1 -Delay 3 -ErrorAction SilentlyContinue
+        if(-not($up)){
+            "`n[-] Could not connect to $ComputerName"
+            return
+        }
+        New-Item -ItemType Directory -ErrorAction SilentlyContinue $Output\$ComputerName | Out-Null
+        $reg = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey('Users', $ComputerName)
+        try{
+            $sids = $reg.GetSubKeyNames()
+        }catch{
+            Write-Output "`n[-] Could not get sids from $ComputerName"
+            return
+        }
+        Write-Output "`n[+] Connected to $ComputerName"
+        Write-Verbose "[*] Sids: $sids"
+        foreach($sid in $sids){
+            New-Item -ItemType Directory -ErrorAction SilentlyContinue $Output\$ComputerName\$sid | Out-Null
+            try{
+                $CA = $reg.OpenSubKey("$sid\SOFTWARE\Microsoft\SystemCertificates\CA\Certificates\")
+                $Root = $reg.OpenSubKey("$sid\SOFTWARE\Microsoft\SystemCertificates\root\Certificates\")
+            }catch{
+                Write-Output "[-] Could not open hive, permission denied"
+                return
+            }
+            try{
+                $CA.GetSubKeyNames() | foreach {
+                    $Cert = $reg.OpenSubKey("$sid\SOFTWARE\Microsoft\SystemCertificates\CA\Certificates\$_")
+                    [byte[]]$blob=$cert.GetValue('blob')
+                    Write-Verbose "[+] Writing certificate $_-CA.cer"
+                    [IO.File]::WriteAllBytes("$Output\$ComputerName\$sid\$_-CA.cer", $Blob)
+                }
+            }catch{}
+            try{
+                $Root.GetSubKeyNames() | foreach {
+                    $Cert = $reg.OpenSubKey("$sid\SOFTWARE\Microsoft\SystemCertificates\Root\Certificates\$_")
+                    [byte[]]$blob=$cert.GetValue('blob')
+                    Write-Verbose "[+] Writing certificate $_-Root.cer"
+                    [IO.File]::WriteAllBytes("$Output\$ComputerName\$sid\$_-Root.cer", $Blob)
+                }
+            }catch{}
+        }
+    }
+}
 function Invoke-WindowsWMI{
     <#
     Install-Module -Name PoshRSJob -Force
