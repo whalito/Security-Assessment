@@ -7,9 +7,6 @@ function Get-RemoteCertificates{
     .DESCRIPTION
     Download certificates from remote machine
 
-    .PARAMETER ComputerList
-    List of computernames that should be scanned, use FQDN, IP, ranges or CIDR
-
     .EXAMPLE
     Get-RemoteCertificates -ComputerName dc.hackme.local -Output out
     'desktop-bbrc9rr','192.168.3.10','192.168.3.11' | Get-RemoteCertificates
@@ -28,7 +25,7 @@ function Get-RemoteCertificates{
     VERBOSE: [+] Writing certificate 7FCAC26BCF7B5BF7E68CD99E72F1F25AE16614F3-Root.cer
     [+] Connected to 192.168.3.10
     VERBOSE: [*] Sids: .DEFAULT,S-1-5-19,S-1-5-20,S-1-5-18
-    [-] Could not open hive
+    [-] Could not open hive, permission denied
     #>
     [cmdletbinding()]
     param(
