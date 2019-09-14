@@ -32,20 +32,22 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 
 (ACL's for System, Local Administrators, and TrustedInstaller is being ignored)
 ### SecurityAssessment.ps1
-	Invoke-LinuxSSH		-  Run Bash script on multiple hosts simultaneously with Posh-SSH
-	Invoke-WindowsWMI	-  Run PowerShell script on multiple hosts simultaneously with WMI
-	Invoke-WindowsPS	-  Run PowerShell script on multiple hosts simultaneously with PSRemote
-	Get-RemoteCertificates	-  Download all CA and Root Certificates from a remote host using OpenRemoteBaseKey
-	Invoke-NetEnum		-  Mostly C# scripts from pingcastle (thx vletoux)
-	Invoke-DomainEnum	-  Runs simple checks on the domain
+	Invoke-LinuxSSH		  -  Run Bash script on multiple hosts simultaneously with Posh-SSH
+	Invoke-WindowsWMI	  -  Run PowerShell script on multiple hosts simultaneously with WMI
+	Invoke-WindowsPS	  -  Run PowerShell script on multiple hosts simultaneously with PSRemote
+	Get-RemoteCertificates	  -  Download all CA and Root Certificates from a remote host using OpenRemoteBaseKey
+	Get-DomainCertificates	  -  Download all published CA, Root and CRL certificates
+	Get-DomainExchangeVersion -  Get exchange version from ADSI and check if vuln to privexchange
+	Invoke-NetEnum		  -  Mostly C# scripts from pingcastle (thx vletoux)
+	Invoke-DomainEnum	  -  Runs simple checks on the domain
 * Domain and Forest Trust
 * CPassword in Sysvol
 * Active Directory Integrated DNS Wildcard Record
 * Password Policy
 * MachineAccountQuota
-* Exchange Version
-* CA templates
-* Null Session on DCs
+* Get-DomainExchangeVersion
+* Get-DomainCertificates
+* Null and anonymous SMB login on DCs
 * BloodHound
 ### bloodhoundanalytics.py
 	Gather Active Directory statistics from BloodHound data
