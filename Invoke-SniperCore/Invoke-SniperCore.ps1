@@ -686,7 +686,7 @@ function Invoke-SniperCore{
                     }catch{}
                 }
                 if($resp){
-                    $resp
+                    $resp | tee -a $path/defaultpass.txt
                 }
             }
         }#end of script scanning script block
