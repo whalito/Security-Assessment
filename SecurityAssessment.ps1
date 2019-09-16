@@ -3,6 +3,73 @@
     Author: Cube0x0
     License: BSD 3-Clause
 #>
+function Get-DefaultPassword{
+    <#
+    .SYNOPSIS
+    Author: Cube0x0
+    License: BSD 3-Clause
+
+    Uses html parsing so if website changes anything, it may break
+
+    .EXAMPLE
+    PS /root/LogonTracer> Get-DefaultPassword d-link                                                                                                                        
+    Product  : D-Link 1. D-Link - 604                                                                                                                                       
+    Version  :                                                                                                                                                              
+    Method   : Telnet                                                                                                                                                       
+    Username : Admin                                                                                                                                                        
+    Password : (none)                                                                                                                                                       
+    Level    : Administrator                                                                                                                                                
+    Doc      :                                                                                                                                                              
+
+    Product  : D-Link 2. D-Link - DCS-2121                                                                                                                                  
+    Version  : 1.04                                                                                                                                                         
+    Method   :                                                                                                                                                              
+    Username : root                                                                                                                                                         
+    Password : admin                                                                                                                                                        
+    Level    : Administrator                                                                                                                                                
+    Doc      : http://newsoft-tech.blogspot.com/2010/09/d-link-dcs-2121-and-state-of-embedded.html                                                                          
+               http://newsoft-tech.blogspot.com/2010/09/d-link-dcs-2121-and-state-of-embedded.html 
+    #>
+	param(
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$true)]
+		[string]$vendor
+    )
+    begin{
+        if(-not(Get-Module PowerHTML -ListAvailable)){
+            Write-Output "[-] Install-module PowerHTML -force"
+            return
+        }
+        try{
+            Import-Module PowerHTML -ErrorAction stop
+        }catch{
+            Write-Output "[-] Could not import PowerHTML"
+            return
+        }
+        try{
+            $html = (Invoke-WebRequest "https://cirt.net/passwords?criteria=$vendor" -ErrorAction stop | ConvertFrom-Html)
+        }catch{
+            Write-Output "[-] Could not connect to cirt.net"
+            Write-Output "[-] $($_.Exception.Message)"
+            return
+        }
+        $tables = $html.SelectNodes('//table').outerhtml
+    }
+    process{
+	    foreach($table in $tables){
+	    	$list = ($table | Convertfrom-html).selectnodes('//tr/td').innerhtml
+	    	[pscustomobject]@{
+                Product  = [string]($list | Select-String -Pattern '<H3><B>' -Context 0,1).line.replace('<a name="','').Replace('"></a><h3><b>',' ').replace('&nbsp;','').Replace('<i>','').Replace('</i><b></b></b></h3>','')
+                Version  = [string]($list | Select-String -Pattern '<B>Version</B>' -Context 0,1).Context.PostContext
+	    		Method	 = [string]($list | Select-String -Pattern '<B>Method</B>' -Context 0,1).Context.PostContext
+	    		Username = [string]($list | Select-String -Pattern '<B>User ID</B>' -Context 0,1).Context.PostContext
+	    		Password = [string]($list | Select-String -Pattern '<B>Password</B>' -Context 0,1).Context.PostContext
+	    		Level	 = [string]($list | Select-String -Pattern '<B>Level</B>' -Context 0,1).Context.PostContext
+	    		Doc 	 = [string]($list | Select-String -Pattern '<B>Doc</B>' -Context 0,1).Context.PostContext.replace('<a href="','').replace('"></a>','').replace('</a>','').replace('">',' ')
+	    	}
+        }
+    }
+}
 function Get-RemoteCertificates{
     <#
     .SYNOPSIS
