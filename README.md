@@ -38,6 +38,7 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 	Get-RemoteCertificates	  -  Download all CA and Root Certificates from a remote host using OpenRemoteBaseKey
 	Get-DomainCertificates	  -  Download all published CA, Root and CRL certificates
 	Get-DomainExchangeVersion -  Get exchange version from ADSI and check if vuln to privexchange
+	Get-DefaultPassword	  -  Search for default passwords for a specific vendor/product
 	Invoke-NetEnum		  -  Mostly C# scripts from pingcastle (thx vletoux)
 	Invoke-DomainEnum	  -  Runs simple checks on the domain
 * Domain and Forest Trust
