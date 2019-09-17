@@ -709,7 +709,6 @@ function Invoke-SniperCore{
             }catch{
                 Write-Output "`n[-]Nmap Segmentation fault may occurred on $computer"
                 Add-Content -Value "Nmap Segmentation fault while script scanning may occurred on $computer" -Path $output/error.txt
-                return
             }
             Write-Output "`n[*] Creating Searchsploit Report"
             searchsploit -v --nmap $path/nmap-scriptscan.xml 2>&1 | tee -a $path/searchsploit.txt
