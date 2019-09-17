@@ -3,7 +3,7 @@ function Invoke-SniperCore{
         .TODO
         Add more recon
         Add support for nessus file?
-        Write PowerShell version of Nmap-parser.py
+        Offline database for password lookup
         Optimize nmap
 
         .SYNOPSIS
@@ -137,7 +137,6 @@ function Invoke-SniperCore{
             'ike-scan' = 'https://github.com/royhills/ike-scan'
             'msfconsole' = 'https://github.com/rapid7/metasploit-framework'
             'searchsploit' =  'https://github.com/offensive-security/exploitdb'
-            'nmap-parser.py' = 'https://github.com/cube0x0/Security-Assessment'
             'wpscan' = 'https://github.com/wpscanteam/wpscan'
             'svmap' = 'https://github.com/EnableSecurity/sipvicious'
             'svwar' = 'https://github.com/EnableSecurity/sipvicious'
@@ -265,7 +264,35 @@ function Invoke-SniperCore{
         #Parsing big nmap scan into invidual .xml reports for each host
         Write-Output "`n[*] Starting Nmap XML Parsing"
         New-Item -ItemType Directory -ErrorAction SilentlyContinue $Output/machines | Out-Null
-        nmap-parser.py -x $nmap -o $output/machines/
+        $header='<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun> 
+<?xml-stylesheet href="file:///usr/bin/../share/nmap/nmap.xsl" type="text/xsl"?>                                                                                                                 
+<nmaprun>                                                                                                                                                                                        
+<scaninfo/>                    
+<verbose/>                            
+<debugging/>'
+        $footer='<runstats>
+<finished/>
+<hosts/>
+</runstats>
+</nmaprun>'
+        try{
+            [xml]$nmap_overall=Get-Content $nmap -ErrorAction Stop
+        }catch{
+            Write-Output "[-] Could not open $nmap"
+            Write-Output "[-] $($_.Exception.Message)"
+            return
+        }
+        $nmap_xml = $nmap_overall.nmaprun.host
+        foreach($scan in $nmap_xml){
+            $hostname = $scan.hostnames.hostname.name
+            if(!$hostname){
+                $hostname = $scan.address.addr
+            }
+            New-Item -ItemType Directory -ErrorAction SilentlyContinue $Output/machines/$hostname | Out-Null
+            $report = $header + $scan.OuterXml + $footer
+            add-Content -Value $report -Path $output/machines/$hostname/nmap.xml
+        }
 
         #Start script scanning
         foreach($machine in (Get-ChildItem $output\machines\)) {
@@ -658,17 +685,18 @@ function Invoke-SniperCore{
             }else{
                 nmap -sS -sC -sV -v -T4 -n -Pn -p $tcp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
             }
-            if((Get-ChildItem $path/nmap-scriptscan.gnmap).length -lt 400){
+
+            try{
+                [xml]$services = (Get-Content $path/nmap-scriptscan.xml)
+            }catch{
                 Write-Output "`n[-]Nmap Segmentation fault may occurred on $computer"
                 Add-Content -Value "Nmap Segmentation fault while script scanning may occurred on $computer" -Path $output/error.txt
+                return
             }
             Write-Output "`n[*] Creating Searchsploit Report"
             searchsploit -v --nmap $path/nmap-scriptscan.xml 2>&1 | tee -a $path/searchsploit.txt
-
-            Write-Output "[*] Looking up default password for each product"
-            [xml]$xml = (Get-Content $path/nmap-scriptscan.xml)
-            $services = $xml.nmaprun.host.ports.port.service.product
-            foreach($service in $services){
+            Write-Output "`n[*] Looking up default password for each product"
+            foreach($service in $services.nmaprun.host.ports.port.service.product){
                 if($service -like 'ssh' -or $service -like 'telnet' -or $service -like 'http' -or $service -like 'ftp'){
                     return
                 }
