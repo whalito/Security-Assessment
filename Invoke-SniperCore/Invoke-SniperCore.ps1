@@ -170,6 +170,12 @@ function Invoke-SniperCore{
 
             Uses html parsing so if website changes anything, it may break
 
+            .PARAMETER Path
+            Path to offline database
+
+            .PARAMETER Vendor
+            Vendor or product to search for
+
             .EXAMPLE
             PS /root/LogonTracer> Get-DefaultPassword d-link                                                                                                                        
             Product  : D-Link 1. D-Link - 604                                                                                                                                       
@@ -192,9 +198,19 @@ function Invoke-SniperCore{
     	    param(
                 [ValidateNotNullOrEmpty()]
                 [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$true)]
-    	    	[string]$vendor
+                [string]$vendor,
+                
+                [string]$Path = "$(Get-Location)/Database.csv",
+
+                [switch]$Offline
             )
             begin{
+                if($Offline){
+                    if(-not(Test-Path $Path)){
+                        Write-Output "[-] Could not find offline Database"
+                        return
+                    }
+                }
                 if(-not(Get-Module PowerHTML -ListAvailable)){
                     Write-Output "[-] Install-module PowerHTML -force"
                     return
@@ -205,27 +221,36 @@ function Invoke-SniperCore{
                     Write-Output "[-] Could not import PowerHTML"
                     return
                 }
-                try{
-                    $html = (Invoke-WebRequest "https://cirt.net/passwords?criteria=$vendor" -ErrorAction stop | ConvertFrom-Html)
-                }catch{
-                    Write-Output "[-] Could not connect to cirt.net"
-                    Write-Output "[-] $($_.Exception.Message)"
-                    return
-                }
-                $tables = $html.SelectNodes('//table').outerhtml
             }
             process{
-    	        foreach($table in $tables){
-    	        	$list = ($table | Convertfrom-html).selectnodes('//tr/td').innerhtml
-    	        	[pscustomobject]@{
-                        Product  = [string]($list | Select-String -Pattern '<H3><B>' -Context 0,1).line.replace('<a name="','').Replace('"></a><h3><b>',' ').replace('&nbsp;','').Replace('<i>','').Replace('</i><b></b></b></h3>','')
-                        Version  = [string]($list | Select-String -Pattern '<B>Version</B>' -Context 0,1).Context.PostContext
-    	        		Method	 = [string]($list | Select-String -Pattern '<B>Method</B>' -Context 0,1).Context.PostContext
-    	        		Username = [string]($list | Select-String -Pattern '<B>User ID</B>' -Context 0,1).Context.PostContext
-    	        		Password = [string]($list | Select-String -Pattern '<B>Password</B>' -Context 0,1).Context.PostContext
-    	        		Level	 = [string]($list | Select-String -Pattern '<B>Level</B>' -Context 0,1).Context.PostContext
-    	        		Doc 	 = [string]($list | Select-String -Pattern '<B>Doc</B>' -Context 0,1).Context.PostContext.replace('<a href="','').replace('"></a>','').replace('</a>','').replace('">',' ')
-    	        	}
+                if($offline){
+                    try{
+                        $database = Import-Csv $Path
+                    }catch{
+                        Write-Output "[-] Could not import csv"
+                    }
+                    $database | Where-Object -Property Product -match $vendor
+                }else{
+                    try{
+                        $html = (Invoke-WebRequest "https://cirt.net/passwords?criteria=$vendor" -ErrorAction stop | ConvertFrom-Html)
+                    }catch{
+                        Write-Output "[-] Could not connect to cirt.net"
+                        Write-Output "[-] $($_.Exception.Message)"
+                        return
+                    }
+                    $tables = $html.SelectNodes('//table').outerhtml
+    	            foreach($table in $tables){
+    	            	$list = ($table | Convertfrom-html).selectnodes('//tr/td').innerhtml
+    	            	[pscustomobject]@{
+                            Product  = [string]($list | Select-String -Pattern '<H3><B>' -Context 0,1).line.replace('<a name="','').Replace('"></a><h3><b>',' ').replace('&nbsp;','').Replace('<i>','').Replace('</i><b></b></b></h3>','')
+                            Version  = [string]($list | Select-String -Pattern '<B>Version</B>' -Context 0,1).Context.PostContext
+    	            		Method	 = [string]($list | Select-String -Pattern '<B>Method</B>' -Context 0,1).Context.PostContext
+    	            		Username = [string]($list | Select-String -Pattern '<B>User ID</B>' -Context 0,1).Context.PostContext
+    	            		Password = [string]($list | Select-String -Pattern '<B>Password</B>' -Context 0,1).Context.PostContext
+    	            		Level	 = [string]($list | Select-String -Pattern '<B>Level</B>' -Context 0,1).Context.PostContext
+    	            		Doc 	 = [string]($list | Select-String -Pattern '<B>Doc</B>' -Context 0,1).Context.PostContext.replace('<a href="','').replace('"></a>','').replace('</a>','').replace('">',' ')
+    	            	}
+                    }
                 }
             }
         }
@@ -697,25 +722,22 @@ function Invoke-SniperCore{
             searchsploit -v --nmap $path/nmap-scriptscan.xml 2>&1 | tee -a $path/searchsploit.txt
             Write-Output "`n[*] Looking up default password for each product"
             foreach($service in $services.nmaprun.host.ports.port.service.product){
-                if($service -like 'ssh' -or $service -like 'telnet' -or $service -like 'http' -or $service -like 'ftp'){
-                    return
-                }
                 try{
-                    $resp = Get-DefaultPassword $service
+                    $resp = Get-DefaultPassword $service -offline
                 }catch{}
                 if(!$resp){
                     try{
-                        $resp = Get-DefaultPassword ($service.split(' ')[0])
+                        $resp = Get-DefaultPassword ($service.split(' ')[0]) -offline
                     }catch{}
                 }
                 if(!$resp){
                     try{
-                        $resp = Get-DefaultPassword ($service.split(' ')[0..1])
+                        $resp = Get-DefaultPassword ($service.split(' ')[0..1]) -offline
                     }catch{}
                 }
                 if(!$resp){
                     try{
-                        $resp = Get-DefaultPassword ($service.split(' ')[1])
+                        $resp = Get-DefaultPassword ($service.split(' ')[1]) -offline
                     }catch{}
                 }
                 if($resp){
