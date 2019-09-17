@@ -42,6 +42,9 @@ function Invoke-SniperCore{
         *REST API service enabled on port localhost:1337/tcp
         *Allow access without API key enabled
 
+        .PARAMETER Hydra
+        Enable hydra bruteforcing
+
         .PARAMETER Misc
         Enable Misc tools
 
@@ -74,8 +77,6 @@ function Invoke-SniperCore{
 
         [string]$HydraThreads,
 
-        [switch]$NoScriptingEngine,
-
         [switch]$MetaSploit,
 
         [switch]$BurpSuite,
@@ -88,9 +89,9 @@ function Invoke-SniperCore{
 
         [switch]$All,
 
-        [switch]$TCP,
+        [switch]$Tcp,
 
-        [switch]$UDP
+        [switch]$Udp
     )
     begin{
         if(!$tcp -and !$udp){
@@ -273,6 +274,8 @@ function Invoke-SniperCore{
             $computer = $machine.Name
             Write-Output "`n[*] Starting script scanning on $computer"
             Get-Date | tee -a $path/date.txt
+            
+            #check for open ports
             [xml]$xml = Get-Content $path/nmap.xml
             $hash=@{}
             Remove-Variable -Name tcp_* -Scope Script
@@ -656,20 +659,22 @@ function Invoke-SniperCore{
                 nmap -sS -sC -sV -v -T4 -n -Pn -p $tcp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
             }
             if((Get-ChildItem $path/nmap-scriptscan.gnmap).length -lt 400){
-                Write-Output "`n[-] Segmentation fault may occurred on $computer"
-                Add-Content -Value "Segmentation fault while script scanning may occurred on $computer" -Path $output/error.txt
+                Write-Output "`n[-]Nmap Segmentation fault may occurred on $computer"
+                Add-Content -Value "Nmap Segmentation fault while script scanning may occurred on $computer" -Path $output/error.txt
             }
             Write-Output "`n[*] Creating Searchsploit Report"
             searchsploit -v --nmap $path/nmap-scriptscan.xml 2>&1 | tee -a $path/searchsploit.txt
 
-            Write-Output "[*] Looking up default password for each service"
-            [xml]$xml = (Get-Content $path/nmap.xml)
-            $services = $xml.nmaprun.host.ports.port.service.name
+            Write-Output "[*] Looking up default password for each product"
+            [xml]$xml = (Get-Content $path/nmap-scriptscan.xml)
+            $services = $xml.nmaprun.host.ports.port.service.product
             foreach($service in $services){
                 if($service -like 'ssh' -or $service -like 'telnet' -or $service -like 'http' -or $service -like 'ftp'){
                     return
                 }
-                $resp = Get-DefaultPassword $service
+                try{
+                    $resp = Get-DefaultPassword $service
+                }catch{}
                 if(!$resp){
                     try{
                         $resp = Get-DefaultPassword ($service.split(' ')[0])
