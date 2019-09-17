@@ -349,7 +349,6 @@ function Invoke-SniperCore{
 
             if($tcp_21){
                 #ftp
-                'ftp-anon' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/ftp | Out-Null
                     hydra -C ./wordlist/ftp-default-userpass.txt $computer ftp -t $threads -e ns | tee -a $path/ftp/hydra.txt
@@ -364,13 +363,13 @@ function Invoke-SniperCore{
                 }
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/ssh | Out-Null
-                    hydra -C ./wordlist/ssh-default-userpass.txt $computer ssh -t $threads -e ns | tee -a $path/ssh/hydra.txt
-                    hydra -L ./wordlist/ssh_defuser.lst -P ./wordlist/ssh_defpass.lst $computer ssh -t $threads -e ns | tee -a $path/ssh/hydra.txt
+                    hydra -C ./wordlist/ssh-default-userpass.txt $computer ssh -t 4 -e ns | tee -a $path/ssh/hydra.txt
+                    hydra -L ./wordlist/ssh_defuser.lst -P ./wordlist/ssh_defpass.lst $computer ssh -t 4 -e ns | tee -a $path/ssh/hydra.txt
                 }
             }
             if($tcp_23){
                 #telnet
-                'telnet-ntlm-info','telnet-encryption' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'telnet-encryption' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/telnet | Out-Null
                     hydra -C ./wordlist/telnet-default-userpass.txt $computer telnet -t $threads -e ns | tee -a $path/telnet/hydra.txt
@@ -379,7 +378,7 @@ function Invoke-SniperCore{
             }
             if($tcp_25){
                 #smtp
-                'smtp-ntlm-info','smtp-commands','smtp-open-relay' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'smtp-open-relay' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/smtp | Out-Null
                     hydra -L ./wordlist/smtp_defuser.lst -P ./wordlist/smtp_defpass.lst $computer smtp -t $threads -e ns | tee -a $path/smtp/hydra.txt
@@ -387,12 +386,11 @@ function Invoke-SniperCore{
             }
             if($tcp_53){}
             if($tcp_79){
-                #finger
-                'finger' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                #finger            
             }
             if($tcp_80){
                 #http
-                'http-config-backup','http-cookie-flags','http-iis-short-name-brute','http-default-accounts','http-devframework','http-git','http-headers','http-iis-webdav-vuln','http-internal-ip-disclosure','http-methods','http-ntlm-info','http-open-proxy','http-php-version','http-security-headers','http-server-header','http-title','http-userdir-enum','http-waf-detect','http-waf-fingerprint','http-webdav-scan' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'http-config-backup','http-iis-short-name-brute','http-default-accounts','http-devframework','http-headers','http-iis-webdav-vuln','http-internal-ip-disclosure','http-php-version','http-security-headers','http-server-header','http-userdir-enum','http-waf-detect','http-waf-fingerprint' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Web){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/http | Out-Null
                     nikto -h "http://$computer" -output $path/http/nikto.txt
@@ -421,7 +419,6 @@ function Invoke-SniperCore{
             }
             if($tcp_110){
                 #pop3
-                'pop3-capabilities','pop3-ntlm-info' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/pop3 | Out-Null
                     hydra -L ./wordlist/pop_defuser.lst -P ./wordlist/pop_defpass.lst $computer pop -t $threads -e ns | tee -a $path/pop3/hydra.txt
@@ -457,7 +454,7 @@ function Invoke-SniperCore{
             }
             if($tcp_162){
                 #snmp
-                'snmp-brute','snmp-hh3c-logins','snmp-interfaces','snmp-ios-config','snmp-netstat','snmp-processes','snmp-sysdescr','snmp-win32-services','snmp-win32-shares','snmp-win32-software','snmp-win32-users' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'snmp-ios-config' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/snmp | Out-Null
                     hydra -P ./wordlist/snmp-strings.txt $computer snmp -S 162 -t $threads -e ns | tee -a $path/snmp/hydra.txt
@@ -472,7 +469,7 @@ function Invoke-SniperCore{
             }
             if($tcp_443){
                 #https
-                'http-config-backup','http-cookie-flags','http-iis-short-name-brute','http-default-accounts','http-devframework','http-git','http-headers','http-iis-webdav-vuln','http-internal-ip-disclosure','http-methods','http-ntlm-info','http-open-proxy','http-php-version','http-security-headers','http-server-header','http-title','http-userdir-enum','http-waf-detect','http-waf-fingerprint','http-webdav-scan' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'http-config-backup','http-iis-short-name-brute','http-default-accounts','http-devframework','http-headers','http-iis-webdav-vuln','http-internal-ip-disclosure','http-php-version','http-security-headers','http-server-header','http-userdir-enum','http-waf-detect','http-waf-fingerprint' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Web){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/https | Out-Null
                     nikto -h "https://$computer" -output $path/https/nikto.txt
@@ -502,7 +499,7 @@ function Invoke-SniperCore{
             }
             if($tcp_445){
                 #smb
-                'smb2-security-mode','smb-vuln-ms17-010','smb2-vuln-uptime','smb-vuln-*' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'smb-vuln-ms17-010','smb2-vuln-uptime','smb-vuln-*' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($MetaSploit){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/smb | Out-Null
                     msfconsole -q -x "use auxiliary/scanner/smb/smb_version; set RHOSTS $computer; run; exit;" | tee -a $path/smb/msf.txt
@@ -532,11 +529,10 @@ function Invoke-SniperCore{
             if($tcp_624){}
             if($tcp_993){
                 #imap
-                'imap-ntlm-info','imap-capabilities' | ForEach-Object {$nmap_script.add($_) | Out-Null}
             }
             if($tcp_1099){
                 #rmi
-                'rmi-dumpregistry','rmi-vuln-classloader' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'rmi-vuln-classloader' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($MetaSploit){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/rmi | Out-Null
                     msfconsole -q -x "use gather/java_rmi_registry; set RHOST $computer; run; exit;" | tee -a $path/rmi/msf.txt
@@ -545,7 +541,7 @@ function Invoke-SniperCore{
             }
             if($tcp_1433){
                 #mssql
-                'ms-sql-empty-password','ms-sql-info','ms-sql-ntlm-info' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'ms-sql-empty-password' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($MetaSploit){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/mssql | Out-Null
                     msfconsole -q -x "use auxiliary/scanner/mssql/mssql_ping; setg RHOSTS $computer; run; back; exit;" | tee -a $path/mssql/msf.txt
@@ -575,7 +571,7 @@ function Invoke-SniperCore{
             if($tcp_3128){}
             if($tcp_3306){
                 #mysql
-                'mysql-empty-password','mysql-info' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'mysql-empty-password' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/mysql | Out-Null
                     hydra -C ./wordlist/mysql-default-userpass.txt $computer mysql -t $threads -e ns | tee -a $path/mysq/hydra.txt
@@ -588,7 +584,6 @@ function Invoke-SniperCore{
             }
             if($tcp_3389){
                 #rdp
-                'rdp-ntlm-info' | ForEach-Object {$nmap_script.add($_) | Out-Null}
             }
             if($tcp_3632){}
             if($tcp_4443){}
@@ -682,11 +677,11 @@ function Invoke-SniperCore{
             }
             if($udp_123){
                 #ntp
-                'ntp-info','ntp-monlist' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'ntp-monlist' | ForEach-Object {$nmap_script.add($_) | Out-Null}
             }
             if($udp_161){
                 #snmp
-                'snmp-hh3c-logins','snmp-interfaces','snmp-ios-config','snmp-netstat','snmp-processes','snmp-sysdescr','snmp-win32-services','snmp-win32-shares','snmp-win32-software','snmp-win32-users' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'snmp-ios-config' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($MetaSploit){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/smtp | Out-Null
                     msfconsole -q -x "use scanner/snmp/snmp_enum; setg RHOSTS $computer; run; exit;" | tee -a $path/smtp/msf.txt
@@ -694,23 +689,21 @@ function Invoke-SniperCore{
             }
             if($udp_500){
                 #ike
-                'ike-version' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Misc){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/ike | Out-Null
                     ike-scan $computer | tee -a $path/ike/ike-scan.txt
                     ike-scan $computer -M -A --id=fake -P | tee -a $path/ike/ike-scan.txt
                 }
             }
-            'vulners' | ForEach-Object {$nmap_script.add($_) | Out-Null}
-            $tcp_ports=$open_ports.tcp -join ','
-            $udp_ports=$open_ports.udp -join ','
+            'vuln','vulners' | ForEach-Object {$nmap_script.add($_) | Out-Null}
             $nmap_script=$nmap_script -join ','
             if($udp){
-                nmap -sU -sC -sV -v -T4 -n -Pn -p $udp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
+                $udp_ports=$open_ports.udp -join ','
+                nmap -sU -sC -sV -v -n -Pn -p $udp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
             }else{
-                nmap -sS -sC -sV -v -T4 -n -Pn -p $tcp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
+                $tcp_ports=$open_ports.tcp -join ','
+                nmap -sS -sC -sV -v -n -Pn -p $tcp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
             }
-
             try{
                 [xml]$services = (Get-Content $path/nmap-scriptscan.xml)
             }catch{
