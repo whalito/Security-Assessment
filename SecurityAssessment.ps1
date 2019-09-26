@@ -1069,6 +1069,7 @@ function Get-DomainExchangeVersion {
             "15.00.0620.029" = "Exchange Server 2013 CU1, Vulnerable to PrivExchange!"
             "15.00.0516.032" = "Exchange Server 2013 RTM, Vulnerable to PrivExchange!"
         }
+        $h=@{}
     }
     process{
         try{
@@ -1082,6 +1083,19 @@ function Get-DomainExchangeVersion {
             Write-Output "Exchange version $ExchangeVersion, $($ExchangeVersions[$ExchangeVersion])"
         }else{
             Write-Output "Could not find exchange version"
+        }
+        try{
+            $ExchangeStats=([ADSI]"LDAP://cn=$CN,cn=Microsoft Exchange,cn=Services,cn=Configuration,$DistinguishedName").msExchOrganizationSummary
+        }catch{
+            Write-Output "Failed connecting to ldap"
+            Write-Output "[-] $($_.Exception.Message)"
+            return
+        }
+        if($ExchangeStats){
+            $ExchangeStats | foreach {try{$h.Add($_.split(',')[0],$_.split(',')[1])}catch{}}
+            New-Object PSObject -Property $h
+        }else{
+        Write-Output "Could not find exchange statistics"
         }
     }
 }
