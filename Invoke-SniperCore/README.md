@@ -1,6 +1,6 @@
 Automated recon scanner made for Kali Linux with PowerShell Core
 
-![image1](https://github.com/cube0x0/Security-Assessment/blob/master/Invoke-SniperCore/image.png)
+![image1](https://github.com/cube0x0/Security-Assessment/blob/master/Invoke-SniperCore/flow.png)
 
 
 Want to contribute? 
