@@ -2,8 +2,6 @@ function Invoke-SniperCore{
     <#
         .TODO
         Add more recon
-        Add support for nessus file?
-        Offline database for password lookup
         Optimize nmap
 
         .SYNOPSIS
@@ -119,11 +117,23 @@ function Invoke-SniperCore{
             $nmap = $NmapXML
         }
         #Check dependencies
-        if(-not(Get-Module PowerHTML -ListAvailable)){
-            throw "[-] Install-module PowerHTML -force"
+        @(
+            'PowerHTML'
+            'PoshRSJob'
+        ) | ForEach-Object {
+            if(-not(Get-Module $_ -ListAvailable)){
+                Write-Output "[-] Missing Powershell Modul: $_"
+                $missing = $true
+            }
         }
-        if(-not(Test-Path /usr/share/nmap/scripts/vulners.nse)){
-            throw "[-] Missing vulner.nse nmap script https://github.com/vulnersCom/nmap-vulners"
+        @{
+            'Database.csv' = 'https://github.com/cube0x0/Security-Assessment/tree/master/Invoke-SniperCore'
+            '/usr/share/nmap/scripts/vulners.nse' = 'https://github.com/vulnersCom/nmap-vulners'
+        }.GetEnumerator() | ForEach-Object {
+            if(-not(test-path $_.Key)){
+                Write-Output "[-] Missing file $($_.key). $($_.value)"
+                $missing = $true
+            }
         }
         @{
             'burpsuite' = 'https://portswigger.net/burp'
@@ -143,7 +153,7 @@ function Invoke-SniperCore{
             'showmount' = 'sudo apt-install nfs-common'
         }.GetEnumerator() | ForEach-Object {
             if(-not(get-command $_.Key -ErrorAction SilentlyContinue)){
-                Write-Output "[-] Missing $($_.key) in PATH $($_.value)"
+                Write-Output "[-] Missing binary $($_.key) in PATH. $($_.value)"
                 $missing = $true
             }
         }
@@ -160,106 +170,12 @@ function Invoke-SniperCore{
         if($MetaSploit){
             Write-Output "[*] Starting postgresql"
             service postgresql start
-        }
-        #import function
-        function local:Get-DefaultPassword{
-            <#
-            .SYNOPSIS
-            Author: Cube0x0
-            License: BSD 3-Clause
-
-            Uses html parsing so if website changes anything, it may break
-
-            .PARAMETER Path
-            Path to offline database
-
-            .PARAMETER Vendor
-            Vendor or product to search for
-
-            .EXAMPLE
-            PS /root/LogonTracer> Get-DefaultPassword d-link                                                                                                                        
-            Product  : D-Link 1. D-Link - 604                                                                                                                                       
-            Version  :                                                                                                                                                              
-            Method   : Telnet                                                                                                                                                       
-            Username : Admin                                                                                                                                                        
-            Password : (none)                                                                                                                                                       
-            Level    : Administrator                                                                                                                                                
-            Doc      :                                                                                                                                                              
-
-            Product  : D-Link 2. D-Link - DCS-2121                                                                                                                                  
-            Version  : 1.04                                                                                                                                                         
-            Method   :                                                                                                                                                              
-            Username : root                                                                                                                                                         
-            Password : admin                                                                                                                                                        
-            Level    : Administrator                                                                                                                                                
-            Doc      : http://newsoft-tech.blogspot.com/2010/09/d-link-dcs-2121-and-state-of-embedded.html                                                                          
-                       http://newsoft-tech.blogspot.com/2010/09/d-link-dcs-2121-and-state-of-embedded.html 
-            #>
-    	    param(
-                [ValidateNotNullOrEmpty()]
-                [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$true)]
-                [string]$vendor,
-                
-                [string]$Path = "$(Get-Location)/Database.csv",
-
-                [switch]$Offline
-            )
-            begin{
-                if($Offline){
-                    if(-not(Test-Path $Path)){
-                        Write-Output "[-] Could not find offline Database"
-                        return
-                    }
-                }
-                if(-not(Get-Module PowerHTML -ListAvailable)){
-                    Write-Output "[-] Install-module PowerHTML -force"
-                    return
-                }
-                try{
-                    Import-Module PowerHTML -ErrorAction stop
-                }catch{
-                    Write-Output "[-] Could not import PowerHTML"
-                    return
-                }
-            }
-            process{
-                if($offline){
-                    try{
-                        $database = Import-Csv $Path
-                    }catch{
-                        Write-Output "[-] Could not import csv"
-                    }
-                    $database | Where-Object -Property Product -match $vendor
-                }else{
-                    try{
-                        $html = (Invoke-WebRequest "https://cirt.net/passwords?criteria=$vendor" -ErrorAction stop | ConvertFrom-Html)
-                    }catch{
-                        Write-Output "[-] Could not connect to cirt.net"
-                        Write-Output "[-] $($_.Exception.Message)"
-                        return
-                    }
-                    $tables = $html.SelectNodes('//table').outerhtml
-    	            foreach($table in $tables){
-    	            	$list = ($table | Convertfrom-html).selectnodes('//tr/td').innerhtml
-    	            	[pscustomobject]@{
-                            Product  = [string]($list | Select-String -Pattern '<H3><B>' -Context 0,1).line.replace('<a name="','').Replace('"></a><h3><b>',' ').replace('&nbsp;','').Replace('<i>','').Replace('</i><b></b></b></h3>','')
-                            Version  = [string]($list | Select-String -Pattern '<B>Version</B>' -Context 0,1).Context.PostContext
-    	            		Method	 = [string]($list | Select-String -Pattern '<B>Method</B>' -Context 0,1).Context.PostContext
-    	            		Username = [string]($list | Select-String -Pattern '<B>User ID</B>' -Context 0,1).Context.PostContext
-    	            		Password = [string]($list | Select-String -Pattern '<B>Password</B>' -Context 0,1).Context.PostContext
-    	            		Level	 = [string]($list | Select-String -Pattern '<B>Level</B>' -Context 0,1).Context.PostContext
-    	            		Doc 	 = [string]($list | Select-String -Pattern '<B>Doc</B>' -Context 0,1).Context.PostContext.replace('<a href="','').replace('"></a>','').replace('</a>','').replace('">',' ')
-    	            	}
-                    }
-                }
-            }
-        }
+        }    
     }
     process{
         if(-not($NmapXML)){
             #https://www.poftut.com/nmap-timing-performance/
             #https://nmap.org/book/man-performance.html
-            Write-Output "[*] Full TCP and Top 1000 UDP Port Scan"
             $HostCount = (cat $ComputerList | Measure-Object -Line).lines
             $min_hostgroup = $HostCount / 4
             $min_paralell = $HostCount / 8
@@ -319,13 +235,106 @@ function Invoke-SniperCore{
             add-Content -Value $report -Path $output/machines/$hostname/nmap.xml
         }
 
-        #Start script scanning
-        foreach($machine in (Get-ChildItem $output\machines\)) {
+        $scanblock = {
+            param(
+                $machine
+            )
+            function local:Get-DefaultPassword{
+                <#
+                .SYNOPSIS
+                Author: Cube0x0
+                License: BSD 3-Clause
+
+                Uses html parsing so if website changes anything, it may break
+
+                .PARAMETER Path
+                Path to offline database
+
+                .PARAMETER Vendor
+                Vendor or product to search for
+
+                .EXAMPLE
+                PS /root/LogonTracer> Get-DefaultPassword d-link                                                                                                                        
+                Product  : D-Link 1. D-Link - 604                                                                                                                                       
+                Version  :                                                                                                                                                              
+                Method   : Telnet                                                                                                                                                       
+                Username : Admin                                                                                                                                                        
+                Password : (none)                                                                                                                                                       
+                Level    : Administrator                                                                                                                                                
+                Doc      :                                                                                                                                                              
+
+                Product  : D-Link 2. D-Link - DCS-2121                                                                                                                                  
+                Version  : 1.04                                                                                                                                                         
+                Method   :                                                                                                                                                              
+                Username : root                                                                                                                                                         
+                Password : admin                                                                                                                                                        
+                Level    : Administrator                                                                                                                                                
+                Doc      : http://newsoft-tech.blogspot.com/2010/09/d-link-dcs-2121-and-state-of-embedded.html                                                                          
+                           http://newsoft-tech.blogspot.com/2010/09/d-link-dcs-2121-and-state-of-embedded.html 
+                #>
+                [CmdletBinding()]
+    	        param(
+                    [Parameter(Position=0,Mandatory=$true,ValueFromPipeline=$true)]
+                    $vendor,
+
+                    [string]$Path = "$(Get-Location)/Database.csv",
+
+                    [switch]$Offline
+                )
+                begin{
+                    if($Offline){
+                        if(-not(Test-Path $Path)){
+                            Write-Output "[-] Could not find offline Database"
+                            return
+                        }
+                    }
+                    if(-not(Get-Module PowerHTML -ListAvailable)){
+                        Write-Output "[-] Install-module PowerHTML -force"
+                        return
+                    }
+                    try{
+                        Import-Module PowerHTML -ErrorAction stop
+                    }catch{
+                        Write-Output "[-] Could not import PowerHTML"
+                        return
+                    }
+                }
+                process{
+                    if($offline){
+                        try{
+                            $database = Import-Csv $Path
+                        }catch{
+                            Write-Output "[-] Could not import csv"
+                        }
+                        $database | Where-Object -Property Product -match $vendor
+                    }else{
+                        try{
+                            $html = (Invoke-WebRequest "https://cirt.net/passwords?criteria=$vendor" -ErrorAction stop | ConvertFrom-Html)
+                        }catch{
+                            Write-Output "[-] Could not connect to cirt.net"
+                            Write-Output "[-] $($_.Exception.Message)"
+                            return
+                        }
+                        $tables = $html.SelectNodes('//table').outerhtml
+    	                foreach($table in $tables){
+    	                	$list = ($table | Convertfrom-html).selectnodes('//tr/td').innerhtml
+    	                	[pscustomobject]@{
+                                Product  = [string]($list | Select-String -Pattern '<H3><B>' -Context 0,1).line.replace('<a name="','').Replace('"></a><h3><b>',' ').replace('&nbsp;','').Replace('<i>','').Replace('</i><b></b></b></h3>','')
+                                Version  = [string]($list | Select-String -Pattern '<B>Version</B>' -Context 0,1).Context.PostContext
+    	                		Method	 = [string]($list | Select-String -Pattern '<B>Method</B>' -Context 0,1).Context.PostContext
+    	                		Username = [string]($list | Select-String -Pattern '<B>User ID</B>' -Context 0,1).Context.PostContext
+    	                		Password = [string]($list | Select-String -Pattern '<B>Password</B>' -Context 0,1).Context.PostContext
+    	                		Level	 = [string]($list | Select-String -Pattern '<B>Level</B>' -Context 0,1).Context.PostContext
+    	                		Doc 	 = [string]($list | Select-String -Pattern '<B>Doc</B>' -Context 0,1).Context.PostContext.replace('<a href="','').replace('"></a>','').replace('</a>','').replace('">',' ')
+    	                	}
+                        }
+                    }
+                }
+            } 
             $nmap_script = New-Object System.Collections.ArrayList
             $path = $machine.FullName
             $computer = $machine.Name
-            Write-Output "`n[*] Starting script scanning on $computer"
-            Get-Date | tee -a $path/date.txt
+            Get-Date | Add-Content -Path $path/date.txt
             
             #check for open ports
             [xml]$xml = Get-Content $path/nmap.xml
@@ -390,24 +399,22 @@ function Invoke-SniperCore{
             }
             if($tcp_80){
                 #http
-                'http-config-backup','http-iis-short-name-brute','http-default-accounts','http-devframework','http-headers','http-iis-webdav-vuln','http-internal-ip-disclosure','http-php-version','http-security-headers','http-server-header','http-userdir-enum','http-waf-detect','http-waf-fingerprint' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'http-config-backup','http-iis-short-name-brute','http-default-accounts','http-devframework','http-headers','http-internal-ip-disclosure','http-php-version','http-security-headers','http-server-header','http-userdir-enum','http-waf-detect','http-waf-fingerprint' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Web){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/http | Out-Null
                     nikto -h "http://$computer" -output $path/http/nikto.txt
                     wafw00f -a "http://$computer" | tee -a $path/http/wafw00f.txt
                     cutycapt --url=http://$computer --out=$path/http/index.jpg --max-wait=5000
-                    try{
-                        $wp=(Invoke-WebRequest http://$computer/wp-content/)
-                    }catch{}
-                    try{
-                        $wp=(Invoke-WebRequest http://$computer/wp/wp-content)
-                    }catch{}
-                    try{
-                        $wp=(Invoke-WebRequest http://$computer/wp/wordpress)
-                    }catch{}
-                    try{
-                        $wp=(Invoke-WebRequest http://$computer/wordpress/wp-content)
-                    }catch{}
+                    @(
+                        "wp-content"
+                        "wordpress/wp-content"
+                        "wp/wp-content"
+                        "wp/wordpress"
+                    ) | ForEach-Object {
+                        try{
+                            $wp=(Invoke-WebRequest https://$computer/$_ -ErrorAction Stop)
+                        }catch{}
+                    }
                     if($wp){
                         wpscan --url ($wp.BaseResponse.RequestMessage.RequestUri.AbsoluteUri).replace('wp-content','') --enumerate ap --no-update | tee -a $path/http/wpscan.txt
                     }
@@ -469,25 +476,23 @@ function Invoke-SniperCore{
             }
             if($tcp_443){
                 #https
-                'http-config-backup','http-iis-short-name-brute','http-default-accounts','http-devframework','http-headers','http-iis-webdav-vuln','http-internal-ip-disclosure','http-php-version','http-security-headers','http-server-header','http-userdir-enum','http-waf-detect','http-waf-fingerprint' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+                'http-config-backup','http-iis-short-name-brute','http-default-accounts','http-devframework','http-headers','http-internal-ip-disclosure','http-php-version','http-security-headers','http-server-header','http-userdir-enum','http-waf-detect','http-waf-fingerprint' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Web){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/https | Out-Null
                     nikto -h "https://$computer" -output $path/https/nikto.txt
                     wafw00f -a "https://$computer" | tee -a $path/https/wafw00f.txt
                     sslscan $computer
                     cutycapt --url=https://$computer --out=$path/https/$computer-port80.jpg --insecure --max-wait=5000
-                    try{
-                        $wp=(Invoke-WebRequest https://$computer/wp-content/)
-                    }catch{}
-                    try{
-                        $wp=(Invoke-WebRequest https://$computer/wordpress/wp-content)
-                    }catch{}
-                    try{
-                        $wp=(Invoke-WebRequest https://$computer/wp/wp-content)
-                    }catch{}
-                    try{
-                        $wp=(Invoke-WebRequest https://$computer/wp/wordpress)
-                    }catch{}
+                    @(
+                        "wp-content"
+                        "wordpress/wp-content"
+                        "wp/wp-content"
+                        "wp/wordpress"
+                    ) | ForEach-Object {
+                        try{
+                            $wp=(Invoke-WebRequest https://$computer/$_ -ErrorAction Stop)
+                        }catch{}
+                    }
                     if($wp){
                         wpscan --url ($wp.BaseResponse.RequestMessage.RequestUri.AbsoluteUri).replace('wp-content','') --enumerate ap --no-update --disable-tls-checks | tee -a $path/https/wpscan.txt
                     }
@@ -499,7 +504,6 @@ function Invoke-SniperCore{
             }
             if($tcp_445){
                 #smb
-                'smb-vuln-ms17-010','smb2-vuln-uptime','smb-vuln-*' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($MetaSploit){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/smb | Out-Null
                     msfconsole -q -x "use auxiliary/scanner/smb/smb_version; set RHOSTS $computer; run; exit;" | tee -a $path/smb/msf.txt
@@ -532,7 +536,6 @@ function Invoke-SniperCore{
             }
             if($tcp_1099){
                 #rmi
-                'rmi-vuln-classloader' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($MetaSploit){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/rmi | Out-Null
                     msfconsole -q -x "use gather/java_rmi_registry; set RHOST $computer; run; exit;" | tee -a $path/rmi/msf.txt
@@ -695,47 +698,42 @@ function Invoke-SniperCore{
                     ike-scan $computer -M -A --id=fake -P | tee -a $path/ike/ike-scan.txt
                 }
             }
-            'vuln','vulners' | ForEach-Object {$nmap_script.add($_) | Out-Null}
+            'vuln' | ForEach-Object {$nmap_script.add($_) | Out-Null}
             $nmap_script=$nmap_script -join ','
             if($udp){
                 $udp_ports=$open_ports.udp -join ','
-                nmap -sU -sC -sV -v -n -Pn -p $udp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
+                nmap -sU -sC -sV -n -Pn -p $udp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
             }else{
                 $tcp_ports=$open_ports.tcp -join ','
-                nmap -sS -sC -sV -v -n -Pn -p $tcp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
+                nmap -sS -sC -sV -n -Pn -p $tcp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
             }
             try{
                 [xml]$services = (Get-Content $path/nmap-scriptscan.xml)
             }catch{
                 Write-Output "`n[-]Nmap Segmentation fault may occurred on $computer"
-                Add-Content -Value "Nmap Segmentation fault while script scanning may occurred on $computer" -Path $output/error.txt
+                Add-Content -Value "Nmap Segmentation fault while script scanning may occurred on $computer" -Path $path/../../error.txt
             }
-            Write-Output "`n[*] Creating Searchsploit Report"
-            searchsploit -v --nmap $path/nmap-scriptscan.xml 2>&1 | tee -a $path/searchsploit.txt
-            Write-Output "`n[*] Looking up default password for each product"
-            foreach($service in $services.nmaprun.host.ports.port.service.product){
-                try{
-                    $resp = Get-DefaultPassword $service -offline
-                }catch{}
-                if(!$resp){
+            if($services){
+                Write-Output "`n[*] Creating Searchsploit Report"
+                searchsploit -v --nmap $path/nmap-scriptscan.xml 2>&1 | tee -a $path/searchsploit.txt
+                Write-Output "`n[*] Looking up default password for each product"
+                $services.nmaprun.host.ports.port.service | where {$_.product}  | foreach {
+                    $product = $_.product.tostring()
                     try{
-                        $resp = Get-DefaultPassword ($service.split(' ')[0]) -offline
+                        Get-DefaultPassword $product -offline -ErrorAction SilentlyContinue
+                        Get-DefaultPassword ($product.split(' ')[0]) -offline -ErrorAction SilentlyContinue
+                        Get-DefaultPassword ($product.split(' ')[0..1]) -offline -ErrorAction SilentlyContinue
+                        Get-DefaultPassword ($product.split(' ')[1]) -offline -ErrorAction SilentlyContinue
                     }catch{}
-                }
-                if(!$resp){
-                    try{
-                        $resp = Get-DefaultPassword ($service.split(' ')[0..1]) -offline
-                    }catch{}
-                }
-                if(!$resp){
-                    try{
-                        $resp = Get-DefaultPassword ($service.split(' ')[1]) -offline
-                    }catch{}
-                }
-                if($resp){
-                    $resp | tee -a $path/defaultpass.txt
-                }
+                } | Out-File -path $path/defaultpass.txt
             }
         }#end of script scanning script block
+        
+        #start one scanning job per machine
+        Write-Output "[*] Starting scanning jobs $(get-date)"
+        (Get-ChildItem $output\machines\) | Start-RSJob -ScriptBlock $scanblock -ArgumentList $_ -ModulesToImport PowerHTML | Out-Null
+        #Get-RSJob | Wait-RSJob -ShowProgress
+        #Write-Output "[*] Scanning completed"
+        #get-date
     }
 }
