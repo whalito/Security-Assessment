@@ -14,7 +14,7 @@ function Get-SegmentationReport{
     param(
         [string[]]$xml,
         [string]$output = "results.csv",
-        [string]$dns = '10.48.48.2'
+        [string]$dns = '10.48.53.61'
     )
     begin{
         $table = @()
@@ -29,12 +29,12 @@ function Get-SegmentationReport{
             $table += $xml.nmaprun.host | foreach {
                 $up = $_ | where {$_.ports.port}
                 if($up){
-                    $hostname = 'Unknowned'
+                    $hostname = 'Unknown'
                     try{
-                        $hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr).NameHost)
+                        $hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr -QuickTimeout -ErrorAction SilentlyContinue).NameHost)[0]
                     }catch{}
-                    $OS = 'Unknowned'
-                    try{
+                    $OS = 'Unknown'
+                    try{    
                         $OS = $up.os.osmatch.name.split(',')[0]
                     }catch{}
                     [pscustomobject]@{
@@ -50,7 +50,7 @@ function Get-SegmentationReport{
         }
     }
     end{
-        $table | Select-Object Hostname,IP,OS,@{n='Ports';Expression={$_.ports -join ", " }} | Export-Csv -NoTypeInformation -Path $output
+        $table | Select-Object Hostname,IP,OS,@{n='Ports';Expression={$_.ports -join ", " }} | Sort-Object -Property ip -Unique |Export-Csv -NoTypeInformation -Path $output
     }
 }
 
@@ -72,7 +72,7 @@ function Get-SegmentationReport2{
 
         [string]$output = "results2.csv",
 
-        [string]$dns = '10.48.48.2'
+        [string]$dns = '10.48.53.61'
     )
     begin{
         $table = @()
@@ -87,11 +87,11 @@ function Get-SegmentationReport2{
             $table += $xml.nmaprun.host | foreach {
                 $up = $_ | where {$_.ports.port}
                 if($up){
-                    $hostname = 'Unknowned'
+                    $hostname = 'Unknown'
                     try{
-                        $hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr).NameHost)
+                        $hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr -QuickTimeout -ErrorAction SilentlyContinue).NameHost)[0]
                     }catch{}
-                    $OS = 'Unknowned'
+                    $OS = 'Unknown'
                     try{
                         $OS = $up.os.osmatch.name.split(',')[0]
                     }catch{}
