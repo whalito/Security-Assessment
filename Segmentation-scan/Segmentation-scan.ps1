@@ -29,9 +29,18 @@ function Get-SegmentationReport{
             $table += $xml.nmaprun.host | foreach {
                 $up = $_ | where {$_.ports.port}
                 if($up){
+                    $hostname = 'Unknowned'
+                    try{
+                        $hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr).NameHost)
+                    }catch{}
+                    $OS = 'Unknowned'
+                    try{
+                        $OS = $up.os.osmatch.name.split(',')[0]
+                    }catch{}
                     [pscustomobject]@{
-                        Hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr).NameHost)
-                        IP = $up.address.addr;OS=$up.os.osmatch.name.split(',')[0]
+                        Hostname = $hostname
+                        IP = $up.address.addr
+                        OS = $os
                         Ports = foreach($port in $($up.ports.port)){
                             $("Port $($port.portid) $($port.service.product) $($port.service.version)")
                         }
@@ -78,10 +87,19 @@ function Get-SegmentationReport2{
             $table += $xml.nmaprun.host | foreach {
                 $up = $_ | where {$_.ports.port}
                 if($up){
+                    $hostname = 'Unknowned'
+                    try{
+                        $hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr).NameHost)
+                    }catch{}
+                    $OS = 'Unknowned'
+                    try{
+                        $OS = $up.os.osmatch.name.split(',')[0]
+                    }catch{}
                     foreach($port in $($up.ports.port)){
                         [pscustomobject]@{
-                            Hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr).NameHost)
-                            IP = $up.address.addr;OS=$up.os.osmatch.name.split(',')[0]
+                            Hostname = $hostname
+                            IP = $up.address.addr
+                            OS = $os
                             Port = $("$($port.portid) $($port.service.product) $($port.service.version)")
                         }
                     }
