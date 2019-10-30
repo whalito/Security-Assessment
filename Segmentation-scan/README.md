@@ -1,4 +1,5 @@
 PS > Import-Module .\Segmentation-scan.psd1
+
 PS > Get-Command -Module Segmentation-scan
 ```
 CommandType     Name                                               Version    Source
