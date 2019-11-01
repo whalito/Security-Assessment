@@ -14,7 +14,7 @@ function Get-SegmentationOverview{
     param(
         [string[]]$xml,
         [string]$output = "overview.csv",
-        [string]$dns = '10.48.53.61'
+        [string]$dns
     )
     begin{
         $table = @()
@@ -30,9 +30,11 @@ function Get-SegmentationOverview{
                 $up = $_ | where {$_.ports.port}
                 if($up){
                     $hostname = 'Unknown'
-                    try{
-                        $hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr -QuickTimeout -ErrorAction SilentlyContinue).NameHost)[0]
-                    }catch{}
+                    if($dns){
+                        try{
+                            $hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr -QuickTimeout -ErrorAction SilentlyContinue).NameHost)[0]
+                        }catch{}
+                    }
                     $OS = 'Unknown'
                     try{    
                         $OS = $up.os.osmatch.name.split(',')[0]
@@ -72,7 +74,7 @@ function Get-SegmentationOverview2{
 
         [string]$output = "overview2.csv",
 
-        [string]$dns = '10.48.53.61'
+        [string]$dns
     )
     begin{
         $table = @()
@@ -89,9 +91,11 @@ function Get-SegmentationOverview2{
                 if($up){
                     $hostname = 'Unknown'
                     $OS = 'Unknown'
-                    try{
-                        $hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr -QuickTimeout -ErrorAction SilentlyContinue).NameHost)[0]
-                    }catch{}
+                    if($dns){
+                        try{
+                            $hostname = ((Resolve-DnsName -Server $dns -Name $up.address.addr -QuickTimeout -ErrorAction SilentlyContinue).NameHost)[0]
+                        }catch{}
+                    }
                     try{
                         $OS = $up.os.osmatch.name.split(',')[0]
                     }catch{}
@@ -99,7 +103,7 @@ function Get-SegmentationOverview2{
                         try{
                             $Service = "$($port.service.product) $($port.service.version)"
                         }catch{}
-                        if(!$Service){
+                        if($Service.count -le 1){
                             $Service = 'Unknown'
                         }
                         [pscustomobject]@{
