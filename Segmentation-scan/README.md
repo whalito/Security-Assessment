@@ -11,3 +11,8 @@ Function        Get-SegmentationOverview                           1.0        Se
 Function        Get-SegmentationOverview2                          1.0        Segmentation-scan
 Function        Get-SegmentationReport                             1.0        Segmentation-scan
 ```
+
+.Example
+PS > Get-SegmentationOverview -xml nmap-scan.xml,nmap-scan2.xml -output overview.csv -dns dnsserver.hackme.local
+PS > Get-SegmentationOverview2 -xml nmap-scan.xml,nmap-scan2.xml -output overview2.csv -dns dnsserver.hackme.local
+PS > Get-SegmentationReport -csv overview.csv,overview2.scv -ReferenceIps ips.txt -ReferencePorts 80,443 -output report.csv
