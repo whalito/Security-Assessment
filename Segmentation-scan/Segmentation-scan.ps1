@@ -103,9 +103,6 @@ function Get-SegmentationOverview2{
                         try{
                             $Service = "$($port.service.product) $($port.service.version)"
                         }catch{}
-                        if($Service.count -le 1){
-                            $Service = 'Unknown'
-                        }
                         [pscustomobject]@{
                             Hostname = $hostname
                             IP = $up.address.addr
