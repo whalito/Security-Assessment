@@ -68,6 +68,8 @@ https://github.com/torrentalle/Ubuntu1804-CIS
 
 https://github.com/dev-sec/windows-baseline
 
+https://github.com/MichaelGrafnetter/DSInternals
+
 # Nessus Audit Files
 https://github.com/nsacyber/Windows-Secure-Host-Baseline/tree/master/Windows/Compliance
 
