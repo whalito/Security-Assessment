@@ -1016,7 +1016,7 @@ function Get-DomainExchangeVersion {
                 $domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
             }catch{
                 Write-Output "[-] $($_.Exception.Message)"
-                Write-Output "Use runas.exe with -domain and -domaincontroller"
+                Write-Output "Use runas.exe"
                 return
             }
         }
@@ -1077,27 +1077,163 @@ function Get-DomainExchangeVersion {
         }catch{
             Write-Output "Failed connecting to ldap"
             Write-Output "[-] $($_.Exception.Message)"
-            return
         }
         if($ExchangeVersion){
             Write-Output "Exchange version $ExchangeVersion, $($ExchangeVersions[$ExchangeVersion])"
-        }else{
-            Write-Output "Could not find exchange version"
         }
         try{
             $ExchangeStats=([ADSI]"LDAP://cn=$CN,cn=Microsoft Exchange,cn=Services,cn=Configuration,$DistinguishedName").msExchOrganizationSummary
         }catch{
             Write-Output "Failed connecting to ldap"
             Write-Output "[-] $($_.Exception.Message)"
-            return
         }
         if($ExchangeStats){
             $ExchangeStats | foreach {try{$h.Add($_.split(',')[0],$_.split(',')[1])}catch{}}
             New-Object PSObject -Property $h
-        }else{
-        Write-Output "Could not find exchange statistics"
         }
     }
+}
+Function Invoke-PingCastle{
+    <#
+    .SYNOPSIS
+    Author: Cube0x0
+    License: BSD 3-Clause
+
+    thx lkys37en https://github.com/lkys37en/Start-ADEnum/blob/master/Functions/Start-ADEnum.ps1#L427
+    
+    .DESCRIPTION
+    Run PingCastle!
+    #>
+    param (
+        [string]$Domain,
+
+        [Parameter(Mandatory=$true)]
+        [ValidateScript({Test-Path -Path $_ })]
+        [string]$output,
+
+        [Parameter(Mandatory=$true)]
+        [ValidateScript({Test-Path -Path $_ })]
+        [string]$Pingcastle
+    )
+    begin{
+        if(!(test-path $output)){
+            New-Item -ItemType Directory -Path $output | Out-Null
+        }
+        #Set variables
+        if(!$Domain){
+            try{
+                $current_domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+            }catch{
+                Write-Output "[-] $($_.Exception.Message)"
+                Write-Output "Use runas.exe"
+                return
+            }
+        }
+        if(!$Domain){
+            $Domain = $current_domain.Name
+        }
+    }
+    process{
+        @(
+            "--server $Domain --healthcheck --no-enum-limit"
+            "--scanner laps_bitlocker --server $Domain"
+            "--scanner nullsession --server $Domain"
+            "--scanner nullsession-trust --server $Domain"
+            "--scanner share --server $Domain"
+            "--scanner smb --server $Domain"
+            "--scanner spooler --server $Domain"
+            "--scanner startup --server $Domain"
+        ) | foreach {
+                "PingCastle.exe $_"
+                Start-Process $Pingcastle -ArgumentList $_ -WorkingDirectory $output -WindowStyle Normal
+        }
+    }
+}
+function New-SYSVOLZip {
+    <#
+    .SYNOPSIS
+    Compresses all folders/files in SYSVOL to a .zip file.
+    Author: Will Schroeder (@harmj0y)  
+    License: BSD 3-Clause  
+    Required Dependencies: None
+    .PARAMETER Domain
+    The domain to clone GPOs from. Defaults to $ENV:USERDNSDOMAIN.
+    .PARAMETER Path
+    The output file for the zip archive, defaults to "$Domain.sysvol.zip".
+    #>
+    
+    [CmdletBinding()]
+    Param(
+        [Parameter(Position = 0)]
+        [ValidateNotNullOrEmpty()]
+        [String]
+        $Domain = $ENV:USERDNSDOMAIN,
+
+        [Parameter(Position = 1)]
+        [Alias('Out', 'OutFile')]
+        [ValidateNotNullOrEmpty()]
+        [String]
+        $Path
+    )
+
+    if ($PSBoundParameters['Path']) {
+        $ZipPath = $PSBoundParameters['Path']
+    }
+    else {
+        $ZipPath = "$($Domain).sysvol.zip"
+    }
+
+    if (-not (Test-Path -Path $ZipPath)) {
+        Set-Content -Path $ZipPath -Value ("PK" + [char]5 + [char]6 + ("$([char]0)" * 18))
+    }
+    else {
+        throw "Output zip path '$ZipPath' already exists"
+    }
+
+    $ZipFileName = (Resolve-Path -Path $ZipPath).Path
+    Write-Verbose "Outputting to .zip file: $ZipFileName"
+
+    $SysVolPath = "\\$($Domain)\SYSVOL\"
+    Write-Verbose "Using SysVolPath: $SysVolPath"
+    $SysVolFolder = Get-Item "\\$($Domain)\SYSVOL\"
+
+    # create the zip file
+    $ZipFile = (New-Object -Com Shell.Application).NameSpace($ZipFileName)
+
+    # 1024 -> do not display errors
+    $ZipFile.CopyHere($SysVolFolder.FullName, 1024)
+    Write-Verbose "$SysVolPath zipped to $ZipFileName"
+    return $ZipFileName
+}
+function Invoke-Grouper2{
+    <#
+    .SYNOPSIS
+    Author: Cube0x0
+    License: BSD 3-Clause
+    
+    .DESCRIPTION
+    Run Grouper2!
+    #>
+    param (
+        [Parameter(Mandatory=$true)]
+        [ValidateScript({Test-Path -Path $_ })]
+        [string]$SysvolPath, 
+
+        [Parameter(Mandatory=$true)]
+        [ValidateScript({Test-Path -Path $_ })]
+        [string]$Grouper2
+    )
+    if((Get-ChildItem $SysvolPath).Attributes -match 'Archive'){
+        [Reflection.Assembly]::LoadWithPartialName( "System.IO.Compression.FileSystem" )
+        $destfile = $SysvolPath.TrimEnd('.zip')
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($SysvolPath,$destfile)
+        $SysvolPath = $destfile
+    }
+    $folder = (Get-ChildItem $SysvolPath -Directory) | where {$_.name -match 'policies'}
+    if(!$folder){
+        $folder = (ls $SysvolPath).fullname
+    }
+    $folder | foreach {& $Grouper2 -o -s $_ -g -f Grouper2.html}
 }
 function Invoke-DomainEnum{
     <#
@@ -1142,6 +1278,8 @@ function Invoke-DomainEnum{
             'ASBBypass.ps1'
             'PowerView.ps1'
             'SharpHound.ps1'
+            'PingCastle.exe'
+            'Grouper2.exe'
         ) | foreach {
             if(-not(Test-Path $PSScriptRoot\$_)){
                 Write-Output "Missing dependencies.. $($_)"
@@ -1158,24 +1296,23 @@ function Invoke-DomainEnum{
     }
     process{
         #Check Trust https://github.com/PowerShellMafia/PowerSploit/blob/dev/Recon/PowerView.ps1
-        Write-Output "`n[*] Looking for Domain Trust"
+        Write-Output "`n[*] Domain Trust"
         try{
             Get-DomainTrust -Domain $Domain -DomainController $DomainController -ErrorAction stop
         }catch{
             Write-Output "[-] Domain trust Failed"
         }
-
         #https://github.com/PowerShellMafia/PowerSploit/blob/master/Exfiltration/Get-GPPPassword.ps1
         #https://github.com/PowerShellMafia/PowerSploit/blob/master/Exfiltration/Get-GPPAutologon.ps1
-        Write-Output "`n[*] Looking for CPasswords in Sysvol"
+        Write-Output "`n[*] CPasswords in Sysvol"
         try{
-            Get-GroupPolicyPassword -Server $DomainController -ErrorAction stop -SearchForest
+            Get-GroupPolicyPassword -Server $DomainController -ErrorAction stop
         }catch{
             Write-Output "[-] CPasswords in Sysvol Failed" 
         }
 
         #Active Directory Integrated DNS Wilcard Record https://blog.netspi.com/exploiting-adidns/
-        Write-Output "`n[*] Testing Active Directory Integrated DNS Wilcard Record"
+        Write-Output "`n[*] Active Directory Integrated DNS Wilcard Record"
         try{
             $zones=(Get-DomainDNSZone -Domain $Domain -DomainController $DomainController).ZoneName | where {$_ -notlike 'RootDNSServers'}
         }catch{
@@ -1197,7 +1334,7 @@ function Invoke-DomainEnum{
         }
 
         #Machine Account Quota https://blog.netspi.com/machineaccountquota-is-useful-sometimes/
-        Write-Output "`n[*] Testing ms-DS-MachineAccountQuota"
+        Write-Output "`n[*] ms-DS-MachineAccountQuota"
         Try{
             $adsi=Get-DomainSearcher -Domain $Domain -DomainController $DomainController -ErrorAction stop
         }
@@ -1208,27 +1345,28 @@ function Invoke-DomainEnum{
         Write-Host "MachineAccountQuota: $maq"
 
         #Accounts with high badpwdcount
-        Write-Output "`n[*] Accounts with high badpwdcount"
-        Get-DomainUser -Properties badpwdcount,samaccountname | where -Property badpwdcount -ge 3
+        #Write-Output "`n[*] Accounts with high badpwdcount"
+        #try{
+        #    Get-DomainUser -Properties badpwdcount,samaccountname | where -Property badpwdcount -ge 3
+        #}catch{
+        #   Write-Output "[-] Testing for accounts with high badpwdcount failed." 
+        #}
 
         #Domain Password Policy
-        Write-Output "`n[*] Testing Domain Password Policy"
-        try{
-            (Get-DomainPolicy -Domain $Domain -DomainController $DomainController -ErrorAction stop).SystemAccess
-            (Get-DomainPolicy -Domain $Domain -DomainController $DomainController -ErrorAction stop).RegistryValues
-            (Get-DomainPolicy -Domain $Domain -DomainController $DomainController -ErrorAction stop).KerberosPolicy
-        }catch{
-            Write-Output "[-] Testing for Domain Password Policy Failed." 
-        }
+        Write-Output "`n[*] Domain Password Policy"
+        (Get-DomainPolicy -Domain $Domain -DomainController $DomainController -ErrorAction stop).SystemAccess
+        (Get-DomainPolicy -Domain $Domain -DomainController $DomainController -ErrorAction stop).RegistryValues
+        (Get-DomainPolicy -Domain $Domain -DomainController $DomainController -ErrorAction stop).KerberosPolicy
 
-        Write-Output "`n[*] Testing Exchange version"
+
+        Write-Output "`n[*] Exchange version"
         Get-DomainExchangeVersion -Domain $Domain -DistinguishedName $DistinguishedName
 
-        Write-Output "`n[*] Testing CA certificate templates"
+        Write-Output "`n[*] CA certificate"
         Get-DomainCertificates -Domain $Domain -DistinguishedName $DistinguishedName
 
         #nullsession on DC's
-        Write-Output "`n[*] Testing NullSession Login on Domain Controllers"
+        Write-Output "`n[*] NullSession Login on Domain Controllers"
         (Get-DomainController -Domain $Domain).displayname | foreach {
             try{
                 New-SmbMapping -RemotePath \\$_\ipc$ -UserName '' -Password '' -ErrorAction stop
@@ -1241,7 +1379,7 @@ function Invoke-DomainEnum{
         }
 
         #anonymous on DC's
-        Write-Output "`n[*] Testing Anonymous Login on Domain Controllers"
+        Write-Output "`n[*] Anonymous Login on Domain Controllers"
         (Get-DomainController -Domain $Domain).displayname | foreach {
             try{
                 New-SmbMapping -RemotePath \\$_\ipc$ -UserName 'anonymous' -Password '' -ErrorAction stop
@@ -1253,8 +1391,21 @@ function Invoke-DomainEnum{
             catch{}
         }
 
+        #Zipping Sysvol and running grouper2
+        Write-Output "`n[*] Running GPOAudit.."
+        try{
+            $zip = New-SYSVOLZip -Domain $domain
+            Invoke-Grouper2 -SysvolPath $zip -Grouper2 '.\Grouper2.exe'
+        }catch{
+            Write-Output "[-] Failed running GPO Audit"
+        }
+
         #bloodhound https://github.com/BloodHoundAD/BloodHound/
         Write-Output "`n[*] Running BloodHound.."
-        invoke-bloodhound -collectionmethod all,GPOLocalGroup,LoggedOn -domain $Domain -SkipPing
+        invoke-bloodhound -collectionmethod all,LoggedOn -domain $Domain -SkipPing
+
+        #PingCastle https://www.pingcastle.com/download/
+        Write-Output "`n[*] Running PingCastle.."
+        Invoke-PingCastle -Domain $domain -output (Get-Location) -Pingcastle '.\PingCastle.exe'
     }
 }
