@@ -39,17 +39,21 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 	Get-DomainCertificates	  -  Download all published CA, Root and CRL certificates
 	Get-DomainExchangeVersion -  Get exchange version from ADSI and check if vuln to privexchange
 	Get-DefaultPassword	  -  Search for default passwords for a specific vendor/product
-	Invoke-NetEnum		  -  Mostly C# scripts from pingcastle (thx vletoux)
-	Invoke-DomainEnum	  -  Runs simple checks on the domain
+	New-SYSVOLZip		  -  Zip Sysvol for Grouper2
+	Invoke-Grouper2		  -  GPO Audit
+	Invoke-PingCastle	  -  Runs multiple pingcastle modules
+	Invoke-DomainEnum	  -  Runs multiple checks on the domain
 * Domain and Forest Trust
 * CPassword in Sysvol
 * Active Directory Integrated DNS Wildcard Record
 * Password Policy
 * MachineAccountQuota
+* Null and anonymous SMB login on DCs
 * Get-DomainExchangeVersion
 * Get-DomainCertificates
-* Null and anonymous SMB login on DCs
-* BloodHound
+* Invoke-Grouper2
+* Invoke-Bloodhound
+* Invoke-PingCastle
 ### bloodhoundanalytics.py
 	Gather Active Directory statistics from BloodHound data
 # Software
@@ -60,11 +64,9 @@ https://github.com/CISOfy/lynis
 
 https://github.com/DenizParlak/Zeus
 
+https://www.pingcastle.com/download/
+
 https://github.com/BloodHoundAD/BloodHound/
-
-https://www.tenable.com/products/nessus
-
-https://github.com/torrentalle/Ubuntu1804-CIS
 
 https://github.com/dev-sec/windows-baseline
 
