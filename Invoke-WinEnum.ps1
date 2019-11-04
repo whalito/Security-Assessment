@@ -586,7 +586,7 @@ function Get-WritableAutoRuns {
     param(
         [string[]]$SkipUser
     )
-    $list = New-Object System.Collections.ArrayList
+    $autoruns = New-Object System.Collections.ArrayList
     $adminPATH = @()
     if(-not(Get-PSDrive | where {$_.name -like 'HKU'})){
         New-PSDrive -PSProvider Registry -Name HKU -Root HKEY_USERS | Out-Null
@@ -633,39 +633,24 @@ function Get-WritableAutoRuns {
         "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SharedTaskScheduler,"
         "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\ShellServiceObjectDelayLoad"
         # not sure if it is all we need to check!
-    )
-    $RegistryKeys | Sort-Object -Unique | foreach {
-        $key = $_
+    ) | Sort-Object -Unique
+    foreach($key in $RegistryKeys){
         if(Test-Path -Path $key){
             [array]$properties = get-item $key | Select-Object -ExpandProperty Property
             if($properties.Count -gt 0){
                 foreach($exe in $properties) {
                     try{
-                        $path = (Get-ItemProperty $key -ErrorAction stop).$exe.replace('"','')
-                        $pathname = $path.subString(0, $path.toLower().IndexOf(".exe")+4).trim('"')
+                        $path = (Get-ItemProperty $key -ErrorAction SilentlyContinue).$exe.replace('"','')
+                        $autoruns.add($path) | Out-Null
                     }catch{}
-                    if(-not($pathname)){
-                        $pathname = $path.split('/')[0]
-                    }
-                    if(Test-Path -Path $pathname){
-                        #File acl
-                        $fileacl = Get-ModifiablePath -Path $pathname -SkipUser $SkipUser
-                        if($fileacl){
-                            $list.Add($fileacl) | Out-Null
-                        }
-                        #Dir acl
-                        $dir = (Get-ChildItem $pathname).DirectoryName
-                        $diracl = Get-ModifiablePath -Path $dir -SkipUser $SkipUser
-                        if($diracl){
-                            $list.Add($diracl) | Out-Null
-                        }
-                    }
                 }
             }
         }
     }
+    $autoruns = $autoruns | Sort-Object -Unique
+    $list = Get-ModifiablePath $autoruns -SkipUser $SkipUser
     if($list.Count -eq 0){
-        return "[+] Found No Weird AutoRuns."
+        return "[+] Non Writable AutoRuns Found"
     }else{
         return $list
     }
@@ -681,30 +666,20 @@ function Get-WritableAdminPath {
     param(
         [string[]]$SkipUser
     )
-    $list = New-Object System.Collections.ArrayList
     $adminPATH = @()
+    $sids=(Get-LocalAdministrators).sid
     if(-not(Get-PSDrive | where {$_.name -like 'HKU'})){
         New-PSDrive -PSProvider Registry -Name HKU -Root HKEY_USERS | Out-Null
     }
-    $sids=(Get-LocalAdministrators).sid
     foreach($sid in $sids){
         try{
             $adminPATH += ((Get-ItemProperty HKU:\$sid\Environment\ -Name Path -ErrorAction SilentlyContinue).Path.split(';') | where {$_})
         }catch{}
     }
     $systemPATH = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).PATH.split(';')
-    $PATH = $adminPATH + $systemPATH | Sort-Object -Unique
-    foreach($pathname in $PATH) {
-        if(($pathname) -and (Test-Path $pathname)){
-            #Dir acl
-            $diracl = Get-ModifiablePath -Path $pathname -SkipUser $SkipUser
-            #Add dir to list
-            if($diracl){
-                $list.Add($diracl) | Out-Null
-            }
-	    }
-    }
-    if($list.Count -eq 0){
+    $PATHS = $adminPATH + $systemPATH | Sort-Object -Unique
+    $list = Get-ModifiablePath $PATHS -SkipUser $SkipUser
+    if(!$list){
         return "[+] Non Writable Admin Path Found"
     }else{
         return $list
@@ -722,31 +697,9 @@ function Get-WritableServices {
         [string[]]$SkipUser
     )
     $list = New-Object System.Collections.ArrayList
-    $services = Get-WmiObject -Class Win32_Service | where {$_.pathname}
-    foreach($Service in $services) {
-        $pathname = $($service.pathname.subString(0, $service.pathname.toLower().IndexOf(".exe")+4)).trim('"')
-        if(-not($pathname)){
-            $pathname = $service.pathname
-        }
-        if(($pathname) -and (Test-Path $pathname)){
-            #File acl
-            try{
-                $fileacl = Get-ModifiablePath -Path $pathname -SkipUser $SkipUser
-            }catch{}
-            if($fileacl){
-                $list.Add($fileacl) | Out-Null
-            }
-            #Dir acl
-            try{
-                $dir = (Get-ChildItem $pathname).DirectoryName
-            }catch{}
-            if($dir){
-                $diracl = Get-ModifiablePath -Path $dir -SkipUser $SkipUser
-                $list.Add($diracl) | Out-Null
-            }
-        }
-    }
-    if($list.Count -eq 0){
+    $servicepaths = (Get-WmiObject -Class Win32_Service | where {$_.pathname}).pathname | Sort-Object -Unique
+    $list = Get-ModifiablePath $servicepaths -SkipUser $SkipUser
+    if(!$list){
         return "[+] Non Writable Service Path Found"
     }else{
         return $list
@@ -756,38 +709,20 @@ function Get-WritableScheduledTasks {
     <#
     .SYNOPSIS
     Gets scheduled tasks binaries and folders with permission  
-    .DESCRIPTION
-    This function looks for scheduled tasks that have Writable binaries and folders
-    .NOTE
-    This functions uses the schtasks.exe utility to get informations about
-    scheduled task and then tries to parse the results. Here I choose to parse XML output from the command.
-    Another approach would be using the ScheduledTask Powershell module that was introduced starting from version 3.0 .
     #>
     param(
         [string[]]$SkipUser
     )
-    $list = New-Object System.Collections.ArrayList
+    $tasks = New-Object System.Collections.ArrayList
     [xml]$tasksXMLobj = $(schtasks.exe /query /xml ONE)
     foreach($task in $tasksXMLobj.Tasks.Task) {
-        $pathname = [System.Environment]::ExpandEnvironmentVariables($task.actions.exec.command).trim()
-        if(($pathname) -and (Test-Path $pathname)){
-            #File acl
-            try{
-            $fileacl = Get-ModifiablePath -Path $pathname -SkipUser $SkipUser
-            }catch{}
-            if($fileacl){
-                $list.Add($fileacl) | Out-Null
-            }
-            #Dir acl
-            try{
-            $dir = (Get-ChildItem $pathname -ErrorAction stop).DirectoryName
-            $diracl = Get-ModifiablePath -Path $dir -SkipUser $SkipUser
-            }catch{}
-            if($diracl){
-                $list.Add($diracl) | Out-Null
-            }
-        }
+        try{
+            $pathname = [System.Environment]::ExpandEnvironmentVariables($task.actions.exec.command).trim()
+            $tasks.add($pathname) | Out-Null
+        }catch{}
     }
+    $tasks = $tasks | where {$_} | Sort-Object -Unique
+    $list = Get-ModifiablePath $tasks -SkipUser $SkipUser
     if($list.Count -eq 0){
         return "[+] Non Writable Scheduled Task Path Found"
     }else{
@@ -839,7 +774,7 @@ function Get-LocalShares {
     if($list.Count -gt 0){
         return $list
     }else{
-        return "[*] No local Shares Were Found"
+        return "[+] No non-standard local shares found"
     }
 }
 function Get-UACLevel {
@@ -1683,6 +1618,50 @@ function Invoke-ExtendedEnum {
         }
     }
 }
+function Get-DPAPIBlobs {
+    <#
+    .SYNOPSIS
+    Author: Cube0x0
+    License: BSD 3-Clause
+    .DESCRIPTION
+    Enumerate DPAPI blobs and masterkeys
+    #>
+    [CmdletBinding()]
+    Param()
+    $blobs=@()
+    foreach($user in ((Get-ChildItem C:\users).fullname)){
+        try{
+            $blobs += Get-ChildItem $user\AppData\Local\Microsoft\Credentials\ -h -ErrorAction SilentlyContinue
+            $blobs += Get-ChildItem $user\AppData\Roaming\Microsoft\Credentials\ -h -ErrorAction SilentlyContinue
+        }catch{
+            Write-Verbose "Access Denied $user"
+        }
+    }
+    try{
+        $blobs += Get-ChildItem $env:SystemRoot\System32\config\systemprofile\AppData\Local\Microsoft\Credentials -h -ErrorAction SilentlyContinue
+    }catch{
+        Write-Verbose "Failed accessing System DPAPI"
+    }
+    foreach($blob in $blobs){
+        try{
+            $bytes = [System.IO.File]::ReadAllBytes($blob.fullname)
+            $offset = $bytes[56..(56+4)]
+            $desc = [System.Text.Encoding]::Unicode.GetString($bytes, 60,([bitconverter]::ToInt32($offset,0)))
+            [byte[]]$Masterkeybytes = $bytes[36..(36+15)]
+            [string]$Masterkey = [guid]::new($Masterkeybytes)
+            [pscustomobject]@{
+                Directory = $blob.Directory
+                name = $blob.name
+                Description = $desc.Replace([environment]::NewLine , '')
+                Masterkey = $Masterkey
+                CreationTime = $blob.CreationTime
+                LastAccessTime = $blob.LastAccessTime
+                SizeKB = [math]::Round($blob.length / 1kb)}
+        }catch{
+            Write-Verbose "Failed enumerating blob $blob.fullname"
+        }
+    }
+}
 function Invoke-WinEnum {
     param(
         [switch]$extended
@@ -1726,7 +1705,7 @@ function Invoke-WinEnum {
         $autologon = Get-RegistryAutoLogon -ErrorAction Stop
         if($autologon){
             Write-Output "[-] AutoLogon Credentials Found"
-            $autologon
+            $autologon | fl *
         }else{
             Write-Output "[+] No AutoLogon Credentials Found"
         }
@@ -1740,7 +1719,7 @@ function Invoke-WinEnum {
         $CachedGPPPassword = Get-CachedGPPPassword -ErrorAction Stop
         if($CachedGPPPassword){
             Write-Output "[-] CachedGPPPassword Found"
-            $CachedGPPPassword
+            $CachedGPPPassword  | fl *
         }else{
             Write-Output "[+] No CachedGPPPassword Found"
         }
@@ -1754,7 +1733,7 @@ function Invoke-WinEnum {
         $UnattendedInstallFile = Get-UnattendedInstallFile -ErrorAction Stop
         if($UnattendedInstallFile){
             Write-Output "[-] UnattendedInstallFiles Found"
-            $UnattendedInstallFile
+            $UnattendedInstallFile  | fl *
         }else{
             Write-Output "[+] No UnattendedInstallFiles Found"
         }
@@ -1768,7 +1747,7 @@ function Invoke-WinEnum {
         $UnquotedService = Get-UnquotedService -ErrorAction Stop -SkipUser $Admins
         if($UnquotedService){
             Write-Output "[-] Unquoted Services Found"
-            $UnquotedService
+            $UnquotedService  | fl *
         }else{
             Write-Output "[+] No Unquoted Services Found"
         }
@@ -1782,7 +1761,7 @@ function Invoke-WinEnum {
         $AlwaysInstallElevated = Get-RegistryAlwaysInstallElevated -ErrorAction Stop
         if($AlwaysInstallElevated){
             Write-Output "[-] AlwaysInstallElevated Found"
-            $AlwaysInstallElevated
+            $AlwaysInstallElevated  | fl *
         }else{
             Write-Output "[+] No AlwaysInstallElevated Found"
         }
@@ -1807,11 +1786,11 @@ function Invoke-WinEnum {
     }
 
     #
-    Write-Output "`n[*] Checking ACL's on Possible High Privileged Scheduled Tasks Binaries and Folders"
+    Write-Output "`n[*] Checking ACL's on Scheduled Tasks Binaries and Folders"
     try{
         Get-WritableScheduledTasks -SkipUser $Admins
     }catch{
-        Write-Output "[-] Checking Possible High Integrity Scheduled Tasks Failed"
+        Write-Output "[-] Checking ACL on Scheduled Tasks Failed"
     }
 
     #
@@ -1861,17 +1840,35 @@ function Invoke-WinEnum {
     }catch{
         Write-Output "[-] Checking non stand services Failed"
     }
-
-    #
     try{
         (Get-WmiObject -Class Win32_Service  -Filter "Name='Spooler' or Name='WinHttpAutoProxySvc'" ) |Format-Table Name,DisplayName,Status,State,StartMode
     }catch{}
 
     #
-    Write-Output "`n[*] Checking for credentials in registry"
+    Write-Output "`n[*] Checking Non standard processes"
+    try{
+        Get-Process -IncludeUserName | where {$_.path -and $_.company -notmatch '^Microsoft.*'} |select Handles,Id,Username,Path
+    }catch{
+        Get-Process | where {$_.path -and $_.company -notmatch '^Microsoft.*'} | select Handles,Id,Path
+    }
+
+    #
+    Write-Output "`n[*] Checking credentials in registry"
     reg query "HKCU\Software\ORL\WinVNC3\Password"
     reg query "HKLM\SYSTEM\Current\ControlSet\Services\SNMP"
     reg query "HKCU\Software\SimonTatham\PuTTY\Sessions"
+
+    #
+    Write-Output "`n[*] Checking Security Updates"
+    try{
+        (Get-WmiObject -Class "win32_quickfixengineering" -Filter 'Description="Security Update"') | ft -AutoSize
+    }catch{}
+
+    #dpapi
+    Write-Output "`n[*] Checking DPAPI blobs"
+    try{
+        Get-DPAPIBlobs -Verbose
+    }catch{}
 
     #
     if($extended){
@@ -1882,7 +1879,7 @@ function Invoke-WinEnum {
             Write-Output "[-] Extended testing failed"
         }
     }
-    
+
     Write-Output "Scan took $($timer.Elapsed.TotalSeconds) Seconds"
     $timer.Stop()
 }
