@@ -2,9 +2,9 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 
 # Poc's
 ### Invoke-WinEnum.ps1
-	Invoke-WinEnum		-  Check Windows host security (thx to Harmj0y, lkys37en, and A-mIn3)
+	Invoke-WinEnum		-  Check Windows host security
 * General System Information
-* Local users in Administrators, RDP, DCOM, PSRemote group
+* Users in Administrators, RDP, DCOM, PSRemote group
 * Firewall, AntiVirus, and Spyware Product for Workstations
 * Autologon Credentials
 * Cached GPP Password
@@ -19,14 +19,18 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * ACL on Directories located in System and Local Administrators PATH Variable
 * Active Listenings Ports
 * Installed Software
+* Non-standard Services
+* Non-Standard Processes
 * Print Spool and Wpad Status
-* PowerShell Logging
+* PowerShell Logging Configuration
+* DPAPI Blobs & Masterkey
 * LAPS
 * Lsass Protection
 * SMBv1
 * PowerShell v2
 * .Net Versions
 * Windows Defender Configuration for Servers
+* Installed Security Patches
 * IIS (encrypted web.config strings, encrypted application pools and virtual directory passwords)
 * MSSQL (Links, Users, Default and Weak Passwords, Databases, ACL on .mdf, Vulnerable configurations...)
 
@@ -76,3 +80,8 @@ https://github.com/MichaelGrafnetter/DSInternals
 https://github.com/nsacyber/Windows-Secure-Host-Baseline/tree/master/Windows/Compliance
 
 https://github.com/nsacyber/Windows-Secure-Host-Baseline/tree/master/Windows%20Firewall/Compliance
+
+# Acknowledgments
+Harmj0y
+lkys37en
+A-mIn3
