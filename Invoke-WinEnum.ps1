@@ -25,6 +25,111 @@ function Get-LocalDCOM {
 function Get-LocalPasswordNotRequired {
     return (Get-WmiObject -Class Win32_UserAccount -Filter  "LocalAccount='True' AND PasswordRequired='False'")
 }
+function Get-NonstandardService {
+    <#
+    .SYNOPSIS
+    Modified version
+
+    Returns services where the associated binaries are either not signed, or are
+    signed by an issuer not matching 'Microsoft'.
+    Author: Will Schroeder (@harmj0y)  
+    License: BSD 3-Clause  
+    Required Dependencies: None  
+    #>
+    [CmdletBinding()]
+    Param()
+
+    function CloneObject($Object) {
+        $NewObj = New-Object PsObject
+        $Object.psobject.Properties | ForEach-Object { Add-Member -MemberType NoteProperty -InputObject $NewObj -Name $_.Name -Value $_.Value }
+        $NewObj
+    }
+
+    function Get-BinaryBasePath {
+
+        [CmdletBinding()]
+        Param(
+            [Parameter(Position = 0, Mandatory = $True, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
+            [Alias('PathName', 'FilePath')]
+            [String]
+            $Path
+        )
+
+        if ($Path -and ($Path -match '^\W*(?<ServicePath>[a-z]:\\.+?(\.exe|\.dll|\.sys))\W*')) {
+            $Matches['ServicePath']
+        }
+        else {
+            Write-output "Regex failed for the following path: $Path"
+        }
+    }
+
+    function Get-PEMetaData {
+
+        [CmdletBinding()]
+        param($Path)
+
+        try {
+            $FullPath = Resolve-Path -Path $Path -ErrorAction Stop
+            try {
+                $Null = [Reflection.AssemblyName]::GetAssemblyName($FullPath)
+                $IsDotNet = $True
+            }
+            catch {
+                $IsDotNet = $False
+            }
+
+            $Signature = Get-AuthenticodeSignature -FilePath $FullPath -ErrorAction SilentlyContinue
+            if ($Signature -and ($Signature.Status -eq 'NotSigned')) {
+                $Signed = $False
+                $Issuer = $Null
+            }
+            else {
+                $Signed = $True
+                $Issuer = $Signature.SignerCertificate.Issuer
+            }
+
+            $Out = New-Object PSObject
+            $Out | Add-Member Noteproperty 'Path' $FullPath
+            $Out | Add-Member Noteproperty 'Signed' $Signed
+            $Out | Add-Member Noteproperty 'Issuer' $Issuer
+            $Out | Add-Member Noteproperty 'IsDotNet' $IsDotNet
+            $Out
+        }
+        catch {
+            Write-Output "Unable to resolve path: $Path"
+        }
+    }
+    $h=@()
+    $MetadataCache = @{}
+    Get-WmiObject -Class win32_Service -Property Name,PathName,StartMode,State,ProcessID | Where-Object { $_.PathName } | ForEach-Object {
+        try{
+            $BasePath = Get-BinaryBasePath -Path $_.PathName 
+            $ServiceName = $_.Name
+        }catch{}
+
+        Write-Verbose "[Get-NonstandardService] Service $ServiceName : $BasePath"
+
+        if ($MetadataCache[$BasePath]) {
+            $Metadata = $MetadataCache[$BasePath]
+        }
+        else {
+            try{
+                $Metadata = Get-PEMetaData -Path $BasePath
+                $MetadataCache[$BasePath] = $Metadata
+            }catch{}
+        }
+        if($Metadata){
+            $ObjectMetadata = CloneObject $Metadata
+            $ObjectMetadata | Add-Member Noteproperty 'Name' $ServiceName
+            $ObjectMetadata | Add-Member Noteproperty 'PathName' $_.PathName
+            $ObjectMetadata | Add-Member Noteproperty 'StartMode' $_.StartMode
+            $ObjectMetadata | Add-Member Noteproperty 'State' $_.State
+            $ObjectMetadata | Add-Member Noteproperty 'ProcessID' $_.ProcessID
+            $h += $ObjectMetadata | Where-Object {(-not $_.Signed) -or ($_.Issuer -notmatch 'Microsoft')}
+        }
+    }
+    return $h
+}
 function Get-SysInfo {
     <#
     Modified https://github.com/threatexpress/red-team-scripts/blob/master/HostEnum.ps1
@@ -345,53 +450,53 @@ function Get-ModifiablePath {
     }
     PROCESS {
         ForEach($TargetPath in $Path) {
-            #$CandidatePaths = @()
-            ## possible separator character combinations
-            #$SeparationCharacterSets = @('"', "'", ' ', "`"'", '" ', "' ", "`"' ")
-            #if ($PSBoundParameters['Literal']) {
-            #    $TempPath = $([System.Environment]::ExpandEnvironmentVariables($TargetPath))
-            #    if (Test-Path -Path $TempPath -ErrorAction SilentlyContinue) {
-            #        $CandidatePaths += Resolve-Path -Path $TempPath | Select-Object -ExpandProperty Path
-            #    }
-            #    else {
-            #        # if the path doesn't exist, check if the parent folder allows for modification
-            #        $ParentPath = Split-Path -Path $TempPath -Parent  -ErrorAction SilentlyContinue
-            #        if ($ParentPath -and (Test-Path -Path $ParentPath)) {
-            #            $CandidatePaths += Resolve-Path -Path $ParentPath -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path
-            #        }
-            #    }
-            #}
-            #else {
-            #    ForEach($SeparationCharacterSet in $SeparationCharacterSets) {
-            #        $TargetPath.Split($SeparationCharacterSet) | Where-Object {$_ -and ($_.trim() -ne '')} | ForEach-Object {
-            #            if (($SeparationCharacterSet -notmatch ' ')) {
-            #                $TempPath = $([System.Environment]::ExpandEnvironmentVariables($_)).Trim()
-            #                if ($TempPath -and ($TempPath -ne '')) {
-            #                    if (Test-Path -Path $TempPath -ErrorAction SilentlyContinue) {
-            #                        # if the path exists, resolve it and add it to the candidate list
-            #                        $CandidatePaths += Resolve-Path -Path $TempPath | Select-Object -ExpandProperty Path
-            #                    }
-            #                    else {
-            #                        # if the path doesn't exist, check if the parent folder allows for modification
-            #                        try {
-            #                            $ParentPath = (Split-Path -Path $TempPath -Parent -ErrorAction SilentlyContinue).Trim()
-            #                            if ($ParentPath -and ($ParentPath -ne '') -and (Test-Path -Path $ParentPath  -ErrorAction SilentlyContinue)) {
-            #                                $CandidatePaths += Resolve-Path -Path $ParentPath -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path
-            #                            }
-            #                        }
-            #                        catch {}
-            #                    }
-            #                }
-            #            }
-            #            else {
-            #                # if the separator contains a space
-            #                $CandidatePaths += Resolve-Path -Path $([System.Environment]::ExpandEnvironmentVariables($_)) -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path | ForEach-Object {$_.Trim()} | Where-Object {($_ -ne '') -and (Test-Path -Path $_)}
-            #            }
-            #        }
-            #    }
-            #}
+            $CandidatePaths = @()
+            # possible separator character combinations
+            $SeparationCharacterSets = @('"', "'", ' ', "`"'", '" ', "' ", "`"' ")
+            if ($PSBoundParameters['Literal']) {
+                $TempPath = $([System.Environment]::ExpandEnvironmentVariables($TargetPath))
+                if (Test-Path -Path $TempPath -ErrorAction SilentlyContinue) {
+                    $CandidatePaths += Resolve-Path -Path $TempPath | Select-Object -ExpandProperty Path
+                }
+                else {
+                    # if the path doesn't exist, check if the parent folder allows for modification
+                    $ParentPath = Split-Path -Path $TempPath -Parent  -ErrorAction SilentlyContinue
+                    if ($ParentPath -and (Test-Path -Path $ParentPath)) {
+                        $CandidatePaths += Resolve-Path -Path $ParentPath -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path
+                    }
+                }
+            }
+            else {
+                ForEach($SeparationCharacterSet in $SeparationCharacterSets) {
+                    $TargetPath.Split($SeparationCharacterSet) | Where-Object {$_ -and ($_.trim() -ne '')} | ForEach-Object {
+                        if (($SeparationCharacterSet -notmatch ' ')) {
+                            $TempPath = $([System.Environment]::ExpandEnvironmentVariables($_)).Trim()
+                            if ($TempPath -and ($TempPath -ne '')) {
+                                if (Test-Path -Path $TempPath -ErrorAction SilentlyContinue) {
+                                    # if the path exists, resolve it and add it to the candidate list
+                                    $CandidatePaths += Resolve-Path -Path $TempPath | Select-Object -ExpandProperty Path
+                                }
+                                else {
+                                    # if the path doesn't exist, check if the parent folder allows for modification
+                                    try {
+                                        $ParentPath = (Split-Path -Path $TempPath -Parent -ErrorAction SilentlyContinue).Trim()
+                                        if ($ParentPath -and ($ParentPath -ne '') -and (Test-Path -Path $ParentPath  -ErrorAction SilentlyContinue)) {
+                                            $CandidatePaths += Resolve-Path -Path $ParentPath -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path
+                                        }
+                                    }
+                                    catch {}
+                                }
+                            }
+                        }
+                        else {
+                            # if the separator contains a space
+                            $CandidatePaths += Resolve-Path -Path $([System.Environment]::ExpandEnvironmentVariables($_)) -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path | ForEach-Object {$_.Trim()} | Where-Object {($_ -ne '') -and (Test-Path -Path $_)}
+                        }
+                    }
+                }
+            }
             #$CandidatePaths makes the scan from to be 4 seconds to 7.5 seconds
-            $TargetPath | Sort-Object -Unique | ForEach-Object {
+            $CandidatePaths | Sort-Object -Unique | ForEach-Object {
                 $CandidatePath = $_
                 if (-not(Test-Path $CandidatePath)){
                     return
@@ -1480,7 +1585,7 @@ function Invoke-DefenderEnum {
         }
     }
 }
-function Invoke-HostEnum {
+function Invoke-ExtendedEnum {
     <#
     Checking Installed Software
     if mssql is installed download PowerUpSQL.ps1 and audit the databases
@@ -1491,8 +1596,6 @@ function Invoke-HostEnum {
         [string]
         $PowerUpSQL='https://raw.githubusercontent.com/NetSPI/PowerUpSQL/master/PowerUpSQL.ps1'
     )
-    Write-Output "[*] Installed Software"
-    (Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" | where {$_.DisplayName} | Select-Object DisplayName, Publisher, InstallDate)
     $mssql = Get-WmiObject -Class Win32_Service  -Filter "Name='MSSQLSERVER'"
     if($mssql){
         Write-Output "[*] Starting MSSQL Audit"
@@ -1579,12 +1682,11 @@ function Invoke-HostEnum {
             Write-Output "[-] ApplicationHost Failed"
         }
     }
-    Write-Output "`n[*] Print Spool Status"
-    (Get-WmiObject -Class Win32_Service  -Filter "Name='Spooler'" | Format-Table Name,DisplayName,Status,State,StartMode)
-    Write-Output "[*] Checking WinHttpAutoProxySvc Status"
-    (Get-WmiObject -Class Win32_Service  -Filter "Name='WinHttpAutoProxySvc'" | Format-Table Name,DisplayName,Status,State,StartMode)
 }
 function Invoke-WinEnum {
+    param(
+        [switch]$extended
+    )
     #Start timer
     $timer = [Diagnostics.Stopwatch]::StartNew()
 
@@ -1602,7 +1704,7 @@ function Invoke-WinEnum {
         $LocalAdmins.name
     )
 
-    #
+    
     Write-Output "`n[*] Checking System Information"
     try{
         Get-SysInfo
@@ -1725,7 +1827,7 @@ function Invoke-WinEnum {
     try{
         Get-WritableServices -SkipUser $Admins
     }catch{
-        "[-] Checking Services Failed"
+        Write-Output "[-] Checking Services Failed"
     }
 
     #
@@ -1733,7 +1835,7 @@ function Invoke-WinEnum {
     try{
         Get-WritableAutoRuns -SkipUser $Admins
     }catch{
-        "[-] Checking AutoRuns Failed"
+        Write-Output "[-] Checking AutoRuns Failed"
     }
     
     #
@@ -1741,13 +1843,47 @@ function Invoke-WinEnum {
     try{
         Get-ActiveListeners | Format-Table
     }catch{
-        "[-] Checking Active Listenings Failed"
+        Write-Output "[-] Checking Active Listenings Failed"
     }
     
-    Write-Output "`n[*] Enumerating host.."
-    Invoke-HostEnum 
+    #
+    Write-Output "[*] Checking Installed Software"
+    try{
+        (Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*" | where {$_.DisplayName} | Select-Object DisplayName, Publisher, InstallDate)
+    }catch{
+        Write-Output "[-] Checking Installed Software failed"
+    }
+
+    #
+    Write-Output "`n[*] Checking Non standard services"
+    try{
+        Get-NonstandardService | Format-List *
+    }catch{
+        Write-Output "[-] Checking non stand services Failed"
+    }
+
+    #
+    try{
+        (Get-WmiObject -Class Win32_Service  -Filter "Name='Spooler' or Name='WinHttpAutoProxySvc'" ) |Format-Table Name,DisplayName,Status,State,StartMode
+    }catch{}
+
+    #
+    Write-Output "`n[*] Checking for credentials in registry"
+    reg query "HKCU\Software\ORL\WinVNC3\Password"
+    reg query "HKLM\SYSTEM\Current\ControlSet\Services\SNMP"
+    reg query "HKCU\Software\SimonTatham\PuTTY\Sessions"
+
+    #
+    if($extended){
+        Write-Output "`n[*] Doing extended testing.."
+        try{
+        Invoke-ExtendedEnum -PowerUpSQL 'https://raw.githubusercontent.com/NetSPI/PowerUpSQL/master/PowerUpSQL.ps1'
+        }catch{
+            Write-Output "[-] Extended testing failed"
+        }
+    }
     
     Write-Output "Scan took $($timer.Elapsed.TotalSeconds) Seconds"
     $timer.Stop()
 }
-#Invoke-WinEnum
+#Invoke-WinEnum -extended
