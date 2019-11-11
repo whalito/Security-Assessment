@@ -39,6 +39,8 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 	Invoke-LinuxSSH		  -  Run Bash script on multiple hosts simultaneously with Posh-SSH
 	Invoke-WindowsWMI	  -  Run PowerShell script on multiple hosts simultaneously with WMI
 	Invoke-WindowsPS	  -  Run PowerShell script on multiple hosts simultaneously with PSRemote
+	Get-BlueKeepStatus	  -  PingCastle Bluekeep script
+	Get-SpoolStatus		  -  PingCastle Print Spooler status script
 	Get-RemoteCertificates	  -  Download all CA and Root Certificates from a remote host using OpenRemoteBaseKey
 	Get-DomainCertificates	  -  Download all published CA, Root and CRL certificates
 	Get-DomainExchangeVersion -  Get exchange version from ADSI and check if vuln to privexchange
