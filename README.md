@@ -43,7 +43,6 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 	Get-DomainCertificates	  -  Download all published CA, Root and CRL certificates
 	Get-DomainExchangeVersion -  Get exchange version from ADSI and check if vuln to privexchange
 	Get-DefaultPassword	  -  Search for default passwords for a specific vendor/product
-	Get-DomainPasswordProperties - Find password properties in AD
 	New-SYSVOLZip		  -  Zip Sysvol for Grouper2
 	Invoke-Grouper2		  -  GPO Audit
 	Invoke-PingCastle	  -  Runs multiple pingcastle modules
@@ -56,7 +55,6 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * Null and anonymous SMB login on DCs
 * Get-DomainExchangeVersion
 * Get-DomainCertificates
-* Get-DomainPasswordProperties
 * Invoke-Grouper2
 * Invoke-Bloodhound
 * Invoke-PingCastle
