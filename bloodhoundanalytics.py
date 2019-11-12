@@ -51,9 +51,10 @@ class FrontPage(object):
         sheet.cell(row, column, value=text)
 
     def do_front_page_analysis(self):
-        func_list = [self.create_node_statistics, self.create_highvalue_list,
-                     self.create_edge_statistics, self.create_qa_statistics,
-                     ]
+        func_list = [
+            self.create_node_statistics, self.create_highvalue_list,
+            self.create_edge_statistics, self.create_qa_statistics,
+        ]
         sheet = self.workbook._sheets[0]
         self.write_single_cell(sheet, 1, 1, "Node Statistics")
         self.write_single_cell(sheet, 1, 2, "Edge Statistics")
@@ -1275,8 +1276,8 @@ class Organization(object):
     def do_Organization(self):
         func_list = [
             self.da_members, self.high_value_members, self.user_local_admin,
-            self.groups_local_admin, self.local_admin_inbound,
-            self.most_session_user, self.most_session_computer, self.laps,
+            self.groups_local_admin, self.local_admin_inbound,self.laps,
+            self.most_session_user, self.most_session_computer,
             self.highvalue_protectedgroup
         ]
         sheet = self.workbook._sheets[4]
@@ -1321,9 +1322,9 @@ class Organization(object):
     def user_local_admin(self, sheet):
         list_query = """MATCH (u:User {domain:{domain}})
                             WITH u
-                            OPTIONAL MATCH (u:User)-[r:AdminTo]->(c:Computer {domain:{domain}})
+                            OPTIONAL MATCH (u:User {domain:{domain}})-[r:AdminTo]->(c:Computer)
                             WITH u,COUNT(c) as expAdmin
-                            OPTIONAL MATCH (u:User)-[r:MemberOf*1..]->(g:Group)-[r2:AdminTo]->(c:Computer {domain:{domain}})
+                            OPTIONAL MATCH (u:User  {domain:{domain}})-[r:MemberOf*1..]->(g:Group)-[r2:AdminTo]->(c:Computer)
                             WHERE NOT (u)-[:AdminTo]->(c)
                             WITH u,expAdmin,COUNT(DISTINCT(c)) as unrolledAdmin
                             RETURN u.name,expAdmin + unrolledAdmin as totalAdmin
@@ -1356,7 +1357,10 @@ class Organization(object):
         results = []
 
         for result in session.run(list_query, domain=self.domain):
-            results.append("{} - {}".format(result[0], result[1]))
+            try:
+                results.append("{} - {}".format(result[0], result[1]))
+            except:
+                print "[-]Encoding error"
 
         session.close()
         self.write_column_data(
@@ -1418,10 +1422,17 @@ class Organization(object):
             sheet, "Top 100 Users with most sessions: {}", results)
 
     def laps(self, sheet):
-        list_query = """MATCH(n)-[:ReadLAPSPassword*1..]->(c:Computer {domain:{domain}})
-                        RETURN n.name, count(c) as count
-                        ORDER BY count DESC
-                        """
+        list_query = """MATCH (u:User {domain:{domain}})
+                            WITH u
+                            OPTIONAL MATCH (u:User)-[r:ReadLAPSPassword]->(c:Computer {domain:{domain}})
+                            WITH u,COUNT(c) as expLAPS
+                            OPTIONAL MATCH (u:User)-[r:MemberOf*1..]->(g:Group)-[r2:ReadLAPSPassword]->(c:Computer {domain:{domain}})
+                            WHERE NOT (u)-[:ReadLAPSPassword]->(c)
+                            WITH u,expLAPS,COUNT(DISTINCT(c)) as unrolledLAPS
+                            RETURN u.name,expLAPS + unrolledLAPS as LAPS
+                            ORDER BY LAPS DESC
+                            LIMIT 100
+                            """
         session = self.driver.session()
         results = []
 
@@ -1474,7 +1485,8 @@ class kerberos(object):
         func_list = [
             self.shortest_path_everyone, self.shortest_path_auth_users,
             self.shortest_path_domain_users, self.unconstrained,
-            self.allow_to_delegation, self.kerberoastable,self.kerberoast_to_highvalue,
+            self.allow_to_delegation, self.kerberoastable,
+            self.kerberoast_to_highvalue, self.spn_local_admin,
             self.asreproastable, self.asrep_to_highvalue
         ]
         sheet = self.workbook._sheets[5]
@@ -1610,6 +1622,29 @@ class kerberos(object):
         session.close()
         self.write_column_data(
             sheet, "Kerberoast to highvalue", results)
+
+    def spn_local_admin(self, sheet):
+        list_query = """MATCH (u:User {hasspn:True,domain:{domain}})
+                            WITH u
+                            OPTIONAL MATCH (u:User {hasspn:True,domain:{domain}})-[r:AdminTo]->(c:Computer)
+                            WITH u,COUNT(c) as expAdmin
+                            OPTIONAL MATCH (u:User {hasspn:True,domain:{domain}})-[r:MemberOf*1..]->(g:Group)-[r2:AdminTo]->(c:Computer)
+                            WHERE NOT (u)-[:AdminTo]->(c)
+                            WITH u,expAdmin,COUNT(DISTINCT(c)) as unrolledAdmin
+                            RETURN u.name,expAdmin + unrolledAdmin as totalAdmin
+                            ORDER BY totalAdmin DESC
+                            LIMIT 100
+                            """
+        session = self.driver.session()
+        results = []
+
+        for result in session.run(list_query, domain=self.domain):
+            results.append("{} - {}".format(result[0], result[1]))
+
+        session.close()
+        self.write_column_data(
+            sheet, "SPN With Local Admin: {}", results)
+
 
     def asreproastable(self, sheet):
         list_query = """MATCH (u:User {domain:{domain},dontreqpreauth:True})
