@@ -138,10 +138,13 @@ function Get-SysInfo {
     #>
     $os_info = Get-WmiObject Win32_OperatingSystem
     $date = Get-Date
-    if(($os_info.producttype) -eq 1){
-        $psv2 = $((Get-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2).state)
-    }elseif(($os_info.producttype) -gt 1){
-        $psv2 = $((Get-WindowsFeature PowerShell-V2 -ErrorAction SilentlyContinue).InstallState)
+    try{
+        $psv2 = (Get-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2 -ErrorAction Stop).state
+    }catch{}
+    if(!$psv2){
+        try{
+            $psv2 = (Get-WindowsFeature PowerShell-V2 -ErrorAction SilentlyContinue -ErrorAction stop).InstallState
+        }catch{}
     }
     $SysInfoHash = @{            
         HostName                = $ENV:COMPUTERNAME                         
@@ -236,7 +239,9 @@ function Get-LocalSecurityProducts {
     	Write-Warning -Message "[-] Error : Could not check Windows Firewall registry informations"	
     }
     $role = $(get-wmiObject -Class Win32_ComputerSystem).DomainRole
-    if($role -ne 0 -and $role -ne 1){
+    if($role -ge 2){
+        Write-Output '[*]Starting Windows Defender enumeration'
+        Invoke-DefenderEnum
         return ($SecInfoHash | Format-List)
     }
     $SecurityProvider=@{         
@@ -357,11 +362,6 @@ function Get-LocalSecurityProducts {
     }catch{
         Write-Output '[-] Failed spyware enum'
         Write-Output "[-] $($_.Exception.Message)"
-    }
-    $OSinfo = (Get-CimInstance -ClassName Win32_OperatingSystem).ProductType
-    if(($defender) -and ($OSinfo -gt 1)){
-        Write-Output '[*]Starting Windows Defender enumeration'
-        Invoke-DefenderEnum
     }
 }
 function Get-ModifiablePath {
@@ -636,19 +636,21 @@ function Get-WritableAutoRuns {
     ) | Sort-Object -Unique
     foreach($key in $RegistryKeys){
         if(Test-Path -Path $key){
-            [array]$properties = get-item $key | Select-Object -ExpandProperty Property
+            [array]$properties = (get-item $key -ErrorAction SilentlyContinue).Property
             if($properties.Count -gt 0){
                 foreach($exe in $properties) {
                     try{
-                        $path = (Get-ItemProperty $key -ErrorAction SilentlyContinue).$exe.replace('"','')
+                        $path = (Get-ItemProperty $key -ErrorAction Stop).$exe.replace('"','')
                         $autoruns.add($path) | Out-Null
                     }catch{}
                 }
             }
         }
     }
-    $autoruns = $autoruns | Sort-Object -Unique
-    $list = Get-ModifiablePath $autoruns -SkipUser $SkipUser
+    $autoruns = $autoruns | where {$_} |Sort-Object -Unique
+    if($autoruns){
+        $list = Get-ModifiablePath $autoruns -SkipUser $SkipUser
+    }
     if($list.Count -eq 0){
         return "[+] Non Writable AutoRuns Found"
     }else{
@@ -673,12 +675,14 @@ function Get-WritableAdminPath {
     }
     foreach($sid in $sids){
         try{
-            $adminPATH += ((Get-ItemProperty HKU:\$sid\Environment\ -Name Path -ErrorAction SilentlyContinue).Path.split(';') | where {$_})
+            $adminPATH += ((Get-ItemProperty HKU:\$sid\Environment\ -Name Path -ErrorAction Stop).Path.split(';') | where {$_})
         }catch{}
     }
-    $systemPATH = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).PATH.split(';')
-    $PATHS = $adminPATH + $systemPATH | Sort-Object -Unique
-    $list = Get-ModifiablePath $PATHS -SkipUser $SkipUser
+    $systemPATH = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -Name PATH -ErrorAction SilentlyContinue).PATH.split(';')
+    $PATHS = $adminPATH + $systemPATH | where {$_} | Sort-Object -Unique
+    if($PATHS){
+        $list = Get-ModifiablePath $PATHS -SkipUser $SkipUser
+    }
     if(!$list){
         return "[+] Non Writable Admin Path Found"
     }else{
@@ -698,7 +702,9 @@ function Get-WritableServices {
     )
     $list = New-Object System.Collections.ArrayList
     $servicepaths = (Get-WmiObject -Class Win32_Service | where {$_.pathname}).pathname | Sort-Object -Unique
-    $list = Get-ModifiablePath $servicepaths -SkipUser $SkipUser
+    if($servicepaths){
+        $list = Get-ModifiablePath $servicepaths -SkipUser $SkipUser
+    }
     if(!$list){
         return "[+] Non Writable Service Path Found"
     }else{
@@ -722,7 +728,9 @@ function Get-WritableScheduledTasks {
         }catch{}
     }
     $tasks = $tasks | where {$_} | Sort-Object -Unique
+    if($tasks){
     $list = Get-ModifiablePath $tasks -SkipUser $SkipUser
+    }
     if($list.Count -eq 0){
         return "[+] Non Writable Scheduled Task Path Found"
     }else{
