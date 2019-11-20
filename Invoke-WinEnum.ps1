@@ -32,7 +32,7 @@ function Invoke-EventLogParser {
         [switch]$4104,
         [switch]$4688
     )
-    $eventlogparser=@'
+    $eventlogparser=@"
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -64,19 +64,19 @@ namespace EventLogParser
 
         static Regex[] powershellRegex =
         {
-            new Regex(@"(New-Object.*System.Management.Automation.PSCredential.*)", RegexOptions.IgnoreCase & RegexOptions.Multiline),
-            new Regex(@"(net(.exe)? user.*)", RegexOptions.IgnoreCase & RegexOptions.Multiline),
-            new Regex(@"(ConvertTo-SecureString.*AsPlainText.*)", RegexOptions.IgnoreCase & RegexOptions.Multiline),
-            new Regex(@"(cmdkey(.exe)?.*/pass:.*)", RegexOptions.IgnoreCase & RegexOptions.Multiline),
-            new Regex(@"(ssh(.exe)?.*-i .*)", RegexOptions.IgnoreCase & RegexOptions.Multiline)
-        };
+            new Regex(@"(New-Object.*System.Management.Automation.PSCredential.*)", RegexOptions.IgnoreCase & RegexOptions.Multiline), //ignore me
+            new Regex(@"(net(.exe)? user.*)", RegexOptions.IgnoreCase & RegexOptions.Multiline), //ignore me
+            new Regex(@"(ConvertTo-SecureString.*AsPlainText.*)", RegexOptions.IgnoreCase & RegexOptions.Multiline), //ignore me
+            new Regex(@"(cmdkey(.exe)?.*/pass:.*)", RegexOptions.IgnoreCase & RegexOptions.Multiline), //ignore me
+            new Regex(@"(ssh(.exe)?.*-i .*)", RegexOptions.IgnoreCase & RegexOptions.Multiline) //ignore me
+        }; //ignore me
 
         static Regex[] processCmdLineRegex =
         {
-            new Regex(@"(net(.exe)? user.*)", RegexOptions.IgnoreCase),
-            new Regex(@"(cmdkey(.exe)?.*/pass:.*)", RegexOptions.IgnoreCase),
-            new Regex(@"(ssh(.exe)?.*-i .*)", RegexOptions.IgnoreCase)
-        };
+            new Regex(@"(net(.exe)? user.*)", RegexOptions.IgnoreCase), //ignore me
+            new Regex(@"(cmdkey(.exe)?.*/pass:.*)", RegexOptions.IgnoreCase), //ignore me
+            new Regex(@"(ssh(.exe)?.*-i .*)", RegexOptions.IgnoreCase) //ignore me
+        }; //ignore me
         #endregion
 
         #region Helper Functions
@@ -148,35 +148,40 @@ namespace EventLogParser
                         Match m = reg.Match(scriptBlock);
                         if (m.Success)
                         {
-                            Console.WriteLine();
-                            Console.WriteLine("[+] Regex Match: {0}", m.Value);
-                            if (streamWriter != null)
+                            Regex regskip = new Regex(@".*//ignore me.*", RegexOptions.IgnoreCase);
+                            bool ignore = regskip.IsMatch(scriptBlock);  
+                            if (!ignore)
                             {
-                                streamWriter.WriteLine(scriptBlock);
-                            }
-                            string[] scriptBlockParts = scriptBlock.Split('\n');
-                            for (int i = 0; i < scriptBlockParts.Length; i++)
-                            {
-                                if (scriptBlockParts[i].Contains(m.Value))
+                                Console.WriteLine();
+                                Console.WriteLine("[+] Regex Match: {0}", m.Value);
+                                if (streamWriter != null)
                                 {
-                                    Console.WriteLine("[+] Regex Context:");
-                                    int printed = 0;
-                                    for (int j = 1; i - j > 0 && printed < context; j++)
+                                    streamWriter.WriteLine(scriptBlock);
+                                }
+                                string[] scriptBlockParts = scriptBlock.Split('\n');
+                                for (int i = 0; i < scriptBlockParts.Length; i++)
+                                {
+                                    if (scriptBlockParts[i].Contains(m.Value))
                                     {
-                                        if (scriptBlockParts[i - j].Trim() != "")
+                                        Console.WriteLine("[+] Regex Context:");
+                                        int printed = 0;
+                                        for (int j = 1; i - j > 0 && printed < context; j++)
                                         {
-                                            Console.WriteLine("\t{0}", scriptBlockParts[i - j].Trim());
-                                            printed++;
+                                            if (scriptBlockParts[i - j].Trim() != "")
+                                            {
+                                                Console.WriteLine("\t{0}", scriptBlockParts[i - j].Trim());
+                                                printed++;
+                                            }
                                         }
-                                    }
-                                    printed = 0;
-                                    Console.WriteLine("\t{0}", m.Value.Trim());
-                                    for (int j = 1; printed < context && i + j < scriptBlockParts.Length; j++)
-                                    {
-                                        if (scriptBlockParts[i + j].Trim() != "")
+                                        printed = 0;
+                                        Console.WriteLine("\t{0}", m.Value.Trim());
+                                        for (int j = 1; printed < context && i + j < scriptBlockParts.Length; j++)
                                         {
-                                            Console.WriteLine("\t{0}", scriptBlockParts[i + j].Trim());
-                                            printed++;
+                                            if (scriptBlockParts[i + j].Trim() != "")
+                                            {
+                                                Console.WriteLine("\t{0}", scriptBlockParts[i + j].Trim());
+                                                printed++;
+                                            }
                                         }
                                     }
                                 }
@@ -275,7 +280,6 @@ namespace EventLogParser
                     }
                 }
             }
-
             foreach(string cmd in results)
             {
                 Console.WriteLine("[+] {0}", cmd);
@@ -285,7 +289,7 @@ namespace EventLogParser
         #endregion
     }
 }
-'@
+"@
     try{
         Add-Type -TypeDefinition $eventlogparser -Language CSharp
     }catch{
@@ -4997,12 +5001,12 @@ function Invoke-WinEnum {
         }
         Write-Output "`n[*] Checking for sensitive logs.."
         Invoke-EventLogParser -All
-        #Write-Output "`n[*] Checking for dotnet services.."
-        #try{
-        #    Get-DotNetServices
-        #}catch{
-        #    Write-Output "[-] dotnet services failed"
-        #}
+        Write-Output "`n[*] Checking for dotnet services.."
+        try{
+            Get-DotNetServices
+        }catch{
+            Write-Output "[-] dotnet services failed"
+        }
     }
     Write-Output "Scan took $($timer.Elapsed.TotalSeconds) Seconds"
     $timer.Stop()
