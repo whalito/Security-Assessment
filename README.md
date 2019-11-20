@@ -6,6 +6,7 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * General System Information
 * Users in Administrators, RDP, DCOM, PSRemote group
 * Firewall, AntiVirus, and Spyware Product for Workstations
+* Windows Defender Configuration for Servers
 * Autologon Credentials
 * Cached GPP Password
 * Unattended Install Files
@@ -26,13 +27,13 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * Non-Standard Processes
 * Print Spool and Wpad Status
 * PowerShell Logging Configuration
-* DPAPI Blobs & Masterkey
+* DPAPI Blobs & Masterkeys
 * LAPS Configuration
 * Lsass Protection
+* Sensitive Information in Logs
 * SMBv1
 * PowerShell v2
 * .Net Versions
-* Windows Defender Configuration for Servers
 * Installed Security Patches
 * IIS (encrypted web.config strings, encrypted application pools and virtual directory passwords)
 * MSSQL (Links, Users, Default and Weak Passwords, Databases, ACL on .mdf, Vulnerable configurations...)
