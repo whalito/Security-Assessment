@@ -12,19 +12,22 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * Unquoted Services Paths
 * AlwaysInstallElevated
 * UAC Configuration 
-* ACL on Local SMB Shares
+* ACL on Non-Default SMB Shares
 * ACL on Service Binaries and Directories
-* ACL on Possible High Privileged Scheduled Tasks Binaries and Directories
+* ACL on Scheduled Tasks Binaries and Directories
 * ACL on AutoRuns Binaries and Directories for System and Local Administrators
-* ACL on Directories located in System and Local Administrators PATH Variable
+* ACL on Directories located in System and Local Administrators PATHS Variable
 * Active Listenings Ports
+* Software Credentials in Registry
 * Installed Software
+* CVE on Installed Software
+* WSUS HTTP Config
 * Non-standard Services
 * Non-Standard Processes
 * Print Spool and Wpad Status
 * PowerShell Logging Configuration
 * DPAPI Blobs & Masterkey
-* LAPS
+* LAPS Configuration
 * Lsass Protection
 * SMBv1
 * PowerShell v2
