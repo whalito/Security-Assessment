@@ -1692,17 +1692,17 @@ function Get-DomainCertificates{
 }
 function Invoke-WindowsSMB {
     <#
-    Modified invoke-masscommand.ps1
+    Author: Cube0x0
+    License: BSD 3-Clause
 
         .SYNOPSIS
-        Uses WMI and a local web server to mass-run a command
-        across multiple machines.
+        Uses WMI and a local smb server
 
         .PARAMETER Hosts
-        Array of host names to run Invoke-MassCommand on.
+        Array of hostnames
 
         .PARAMETER HostList
-        List of host names to run Invoke-MassCommand on.
+        List of hostnames
 
         .PARAMETER Command
         PowerShell one-liner command to run.
@@ -1734,40 +1734,68 @@ function Invoke-WindowsSMB {
         [string]
         $FQDN
     )
-    begin {
-        if($HostList){
-            if (Test-Path -Path $HostList){
-                $Hosts += Get-Content -Path $HostList
-            }
-            else {
-                Write-Output "[!] Input file doesn't exist!"
-                return
+    if($HostList){
+        if (Test-Path -Path $HostList){
+            try{
+                $Hosts += Get-Content -Path $HostList -ErrorAction Stop
+            }catch{
+                throw
             }
         }
-        if(!(Test-Path $SMBFolder)){
-            Write-Output "[*]Creating smb folder"
-            New-Item -Force -ItemType directory -Path $SMBFolder | Out-Null
+        else {
+            Write-Output "[!] Input file doesn't exist!"
+            return
         }
-        try{
-            Write-Output "[*]Creating smb share"
-            New-SmbShare -Path $SMBFolder -ChangeAccess 'Guest','Everyone' -name temp -ErrorAction stop
-        }catch{
-            throw
-        }
-        Write-Output "[*]Settings NTFS permissions"
-        icacls $SMBFolder /grant Guest:M
-        icacls $SMBFolder /grant Everyone:M
+    }
+    if(!(Test-Path $SMBFolder)){
+        Write-Output "[*]Creating smb folder"
+        New-Item -Force -ItemType directory -Path $SMBFolder | Out-Null
+    }
+    Write-Output "[*]Creating smb share and setting permissions"
+    try{
+        New-SmbShare -Path $SMBFolder -ChangeAccess 'Guest','Everyone' -name temp -ErrorAction stop | Out-Null
+    }catch{
+        throw
+    }
+    
+    icacls $SMBFolder /grant Guest:M
+    icacls $SMBFolder /grant Everyone:M
+
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+
+    foreach($_host in $hosts) {
+        $_command = "$Command | out-file -encoding ascii -FilePath  \\$FQDN\temp\$_host"
+        Write-Output "[*]Executing $_command on $_host"
+        $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($_Command))
+        Invoke-WmiMethod -ComputerName $_host -Path Win32_process -Name create -ArgumentList "powershell.exe -window hidden -exe bypass -nop -enc $encodedCommand" | out-null
     }
 
-    process {
-        foreach($_host in $hosts) {
-            $random = 1000..9999 | Get-Random
-            $_command = "$Command | out-file -encoding ascii -FilePath  \\$FQDN\temp\$_host-$random"
-            Write-Output "[*]Executing $_command on $_host"
-            $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($_Command))
-            Invoke-WmiMethod -ComputerName $_host -Path Win32_process -Name create -ArgumentList "powershell.exe -exe bypass -nop -enc $encodedCommand" | out-null
+    while($done.Count -ne $Hosts.Count){
+        Start-Sleep -Seconds 10
+        $done=New-Object System.Collections.ArrayList
+        $checkedin=New-Object System.Collections.ArrayList
+        $c=$null
+        $d=$null
+        try{
+            $c = (gci $SMBFolder | where {$_.Length -eq 0}).name
+        }catch{}
+        try{
+            $d = (gci $SMBFolder | where {$_.Length -gt 0}).name
+        }catch{}
+        foreach($_host in $c){
+            if($_host -notin $checkedin){
+                $checkedin.Add($_host) | Out-Null
+            }
         }
+        foreach($_host in $d){
+            if($_host -notin $done){
+                $done.Add($_host) | Out-Null
+            }
+        }
+        Write-Output "[*]Checkedin`n$checkedin`n[*]Done`n$done`n"
     }
+    $timer.Stop()
+    Write-Output "Scan took $($timer.Elapsed.TotalSeconds) Seconds"
 }
 function Invoke-WindowsWMI{
     <#
