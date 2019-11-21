@@ -26,12 +26,8 @@ function Get-LocalPasswordNotRequired {
     return (Get-WmiObject -Class Win32_UserAccount -Filter  "LocalAccount='True' AND PasswordRequired='False'")
 }
 function Invoke-EventLogParser {
-    param(
-        [switch]$All,
-        [switch]$4103,
-        [switch]$4104,
-        [switch]$4688
-    )
+    param()
+    $scriptblock=@'
     $eventlogparser=@"
 using System;
 using System.Collections.Generic;
@@ -81,7 +77,7 @@ namespace EventLogParser
 
         #region Helper Functions
 
-        static EventLogQuery GetEventLog(string logName, int eventId, PathType pathType=PathType.LogName)
+        static EventLogQuery GetEventLog(string logName, int eventId, PathType pathType = PathType.LogName)
         {
             string query = String.Format("*[System/EventID={0}]", eventId);
             EventLogQuery eventLogQuery = new EventLogQuery(logName, pathType, query);
@@ -149,7 +145,7 @@ namespace EventLogParser
                         if (m.Success)
                         {
                             Regex regskip = new Regex(@".*//ignore me.*", RegexOptions.IgnoreCase);
-                            bool ignore = regskip.IsMatch(scriptBlock);  
+                            bool ignore = regskip.IsMatch(scriptBlock);
                             if (!ignore)
                             {
                                 Console.WriteLine();
@@ -280,7 +276,7 @@ namespace EventLogParser
                     }
                 }
             }
-            foreach(string cmd in results)
+            foreach (string cmd in results)
             {
                 Console.WriteLine("[+] {0}", cmd);
             }
@@ -290,29 +286,14 @@ namespace EventLogParser
     }
 }
 "@
-    try{
-        Add-Type -TypeDefinition $eventlogparser -Language CSharp
-    }catch{
-        Write-Output '[-]Failed compiling csharp code'
-    }
-    try{
-        if($all){
-            [EventLogParser.EventLogHelpers]::Parse4103Events()
-            [EventLogParser.EventLogHelpers]::Parse4104Events($null,3)
-            [EventLogParser.EventLogHelpers]::Parse4688Events()
-        }
-        if($4103){
-            [EventLogParser.EventLogHelpers]::Parse4103Events()
-        }
-        if($4104){
-            [EventLogParser.EventLogHelpers]::Parse4104Events($null,3)
-        }
-        if($4688){
-            [EventLogParser.EventLogHelpers]::Parse4688Events()
-        }
-    }catch{
-        Write-output "[-]EventLogParser failed"
-    }
+    Add-Type -TypeDefinition $eventlogparser -Language CSharp
+    [EventLogParser.EventLogHelpers]::Parse4103Events()
+    [EventLogParser.EventLogHelpers]::Parse4104Events($null,3)
+    [EventLogParser.EventLogHelpers]::Parse4688Events()
+'@
+    $enc = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($scriptblock))
+    $resp = powershell -nop -exe bypass -enc $enc
+    return $resp
 }
 function Get-NonstandardService {
     <#
@@ -2946,8 +2927,12 @@ function Get-SysInfo {
     .SYNOPSIS
     Get basic system information from the host
     #>
+    try{
     $os_info = Get-WmiObject Win32_OperatingSystem
+    }catch{}
+    try{
     $date = Get-Date
+    }catch{}
     try{
         $psv2 = (Get-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2 -ErrorAction Stop).state
     }catch{}
@@ -4952,10 +4937,8 @@ function Invoke-WinEnum {
     }
 
     #
-    Write-Output "`n[*] Checking credentials in registry"
-    reg query "HKCU\Software\ORL\WinVNC3\Password"
-    reg query "HKLM\SYSTEM\Current\ControlSet\Services\SNMP"
-    reg query "HKCU\Software\SimonTatham\PuTTY\Sessions"
+    #Write-Output "`n[*] Checking credentials in registry"
+    #Get-ChildItem -path HKLM:\SYSTEM\CurrentControlSet\Services\SNMP -Recurse -ErrorAction SilentlyContinue
 
     #
     #Write-Output "`n[*] Checking for sensitive files in C:\Users\"
@@ -4993,17 +4976,20 @@ function Invoke-WinEnum {
         }catch{
             Write-Output "[-] Extended testing failed"
         }
+        
         Write-Output "`n[*] Checking for vulnerable software.."
         try{
             Invoke-Vulmap
         }catch{
             Write-Output "[-] vulmap failed"
         }
+        
         Write-Output "`n[*] Checking for sensitive logs.."
         Invoke-EventLogParser -All
+        
         Write-Output "`n[*] Checking for dotnet services.."
         try{
-            Get-DotNetServices
+            Get-DotNetServices 
         }catch{
             Write-Output "[-] dotnet services failed"
         }
