@@ -40,9 +40,10 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 
 (ACL's for System, Local Administrators, and TrustedInstaller is being ignored)
 ### SecurityAssessment.ps1
-	Invoke-LinuxSSH		  -  Run Bash script on multiple hosts simultaneously with Posh-SSH
-	Invoke-WindowsWMI	  -  Run PowerShell script on multiple hosts simultaneously with WMI
-	Invoke-WindowsPS	  -  Run PowerShell script on multiple hosts simultaneously with PSRemote
+	Invoke-LinuxSSH		  -  Run Bash scripts on multiple hosts simultaneously with Posh-SSH
+	Invoke-WindowsWMI	  -  Run PowerShell on multiple hosts simultaneously with WMI
+	Invoke-WindowsPS	  -  Run PowerShell on multiple hosts simultaneously with PSRemote
+	Invoke-WindowsSMB	  -  Run PowerShell on multiple hosts with WMI and output over SMB
 	Get-BlueKeepStatus	  -  PingCastle Bluekeep script
 	Get-SpoolStatus		  -  PingCastle Print Spooler status script
 	Get-RemoteCertificates	  -  Download all CA and Root Certificates from a remote host using OpenRemoteBaseKey
@@ -88,6 +89,10 @@ https://github.com/nsacyber/Windows-Secure-Host-Baseline/tree/master/Windows/Com
 https://github.com/nsacyber/Windows-Secure-Host-Baseline/tree/master/Windows%20Firewall/Compliance
 
 # Acknowledgments
+Thanks to
+
 Harmj0y
+
 lkys37en
+
 A-mIn3
