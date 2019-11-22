@@ -4969,6 +4969,14 @@ function Invoke-WinEnum {
     }
 
     #
+    $role = (get-wmiObject -Class Win32_ComputerSystem).DomainRole
+    if($role -ge 2){
+        Write-Output '[*]Starting best practice analyzer'
+        (Get-WindowsFeature | where {$_.BestPracticesModelId -and $_.installed} ).BestPracticesModelId | foreach {Invoke-BpaModel -BestPracticesModelId $_ -ErrorAction SilentlyContinue}
+        (Get-WindowsFeature | where {$_.BestPracticesModelId -and $_.installed} ).BestPracticesModelId | foreach {Get-BpaResult -BestPracticesModelId $_ -ErrorAction SilentlyContinue} | where { -not $_.Compliance} | fl *
+    }
+    
+    #
     if($extended){
         Write-Output "`n[*] Doing extended testing.."
         try{
