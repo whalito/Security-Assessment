@@ -21,7 +21,7 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * Active Listenings Ports
 * Software Credentials in Registry
 * Installed Software
-* CVE on Installed Software
+* CVE on Installed Software (vulmap)
 * WSUS HTTP Config
 * Non-standard Services
 * Non-Standard Processes
@@ -35,6 +35,7 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * PowerShell v2
 * .Net Versions
 * Installed Security Patches
+* Best Practices Analyzer
 * IIS (encrypted web.config strings, encrypted application pools and virtual directory passwords)
 * MSSQL (Links, Users, Default and Weak Passwords, Databases, ACL on .mdf, Vulnerable configurations...)
 
