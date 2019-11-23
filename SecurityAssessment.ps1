@@ -1843,7 +1843,9 @@ function Invoke-WindowsWMI{
 
         [string]$Command,
 
-        [string]$OutputFolder = "$((Get-Location).path)\windows"
+        [string]$OutputFolder = "$((Get-Location).path)\windows",
+
+        [int32]$Threads = 10
     )
     function Invoke-WMIExec{
         <#        
@@ -2012,7 +2014,7 @@ function Invoke-WindowsWMI{
         'Location' = $OutputFolder
         'Enc' = $Enc
     }
-    $hosts | start-rsjob -Name {$_} -ArgumentList $ScriptParams -FunctionFilesToImport "$PSScriptRoot\securityassessment.ps1" -ScriptBlock {
+    $hosts | start-rsjob -Throttle $Threads -Name {$_} -ArgumentList $ScriptParams -FunctionFilesToImport "$PSScriptRoot\securityassessment.ps1" -ScriptBlock {
         param(
             $Inputargs
         )
@@ -2047,7 +2049,9 @@ function Invoke-WindowsPS{
 
         [string]$Command,
 
-        [string]$OutputFolder = "$((Get-Location).path)\windows"
+        [string]$OutputFolder = "$((Get-Location).path)\windows",
+
+        [int32]$Threads = 10
     )
     #Import ComputerNames
     if($HostList){
@@ -2084,7 +2088,7 @@ function Invoke-WindowsPS{
         'Location' = $OutputFolder
         'Enc' = $Enc
     }
-    $Hosts | start-rsjob -Name {$_} -ArgumentList $ScriptParams -ScriptBlock {
+    $Hosts | start-rsjob -Throttle $Threads -Name {$_} -ArgumentList $ScriptParams -ScriptBlock {
             param(
                 $Inputargs
             )
