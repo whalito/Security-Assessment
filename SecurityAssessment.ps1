@@ -2134,37 +2134,48 @@ function Invoke-LinuxSSH{
     param (
         [Parameter(Position=0,ValueFromPipeline=$True)]
         $Computers = '.\linux.csv',
+        
         [ValidateScript({Test-Path -Path $_ })]
-        [string]$ScriptPath
+        [string]$ScriptPath,
+
+        [string]$OutputFolder = "($(Get-Location).path)\linux",
+
+        [int32]$Threads = 10
     )
     #Import ComputerName, Username, Passwords from CSV
     if(Test-Path $Computers){
-        $Computers = import-csv $Computers -ErrorAction Stop
+        try{
+            $Computers = import-csv $Computers -ErrorAction Stop
+        }catch{
+            throw
+        }
     }
     #Import dependencies
     try{
         Import-Module PoshRSJob -ErrorAction Stop
         Import-Module Posh-SSH -ErrorAction Stop
     }catch{
-        Write-Output "[-] $($_.Exception.Message)"
-        return
+        throw
     }
     #Create output folder
-    $OutputFolder = "$((Get-Location).path)\linux"
     if(-not(Test-Path $OutputFolder)){
-        New-Item -ItemType Directory -Name 'linux' -Path "." | Out-Null
+        New-Item -ItemType Directory $OutputFolder | Out-Null
     }
     #Get latest LinEnum.sh
     #Use a local copy for extended testing
     if($ScriptPath){
-        $Script = Get-Content $ScriptPath -ErrorAction Stop
+        try{
+            $Script = Get-Content $ScriptPath -ErrorAction Stop
+        }catch{
+            Write-Output "[-] Can't read script"
+            throw
+        }
     }else{
         try{
             $Script = (new-object net.webclient).downloadstring('https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh')
         }catch{
             Write-Output "[-] Can't Download LinEnum"
-            Write-Output "[-] $($_.Exception.Message)"
-            return
+            throw
         }
     }
     #Params
@@ -2172,30 +2183,23 @@ function Invoke-LinuxSSH{
         'Script' = $Script
         'Location' = $OutputFolder
     }
-    #One thread for every computer :D
-    Get-RSJob | where {$_.state -like 'Completed'} | Remove-RSJob 
-    $Computers | start-rsjob -Name {$_.computername} -ArgumentList $ScriptParams -ModulesToImport 'Posh-SSH' -ScriptBlock {
-            param($Inputargs)
-            $Script = $Inputargs.Script
-            $Location = $Inputargs.Location
-            $secpasswd = ConvertTo-SecureString $_.password -AsPlainText -Force
-            $creds = New-Object System.Management.Automation.PSCredential ($_.username, $secpasswd)
-            try{
-                $session = New-SSHSession -ComputerName $_.ComputerName -Credential $creds -Force -WarningAction SilentlyContinue
-            }catch{
-                Add-Content -Path "$Location\$($_.ComputerName)" -Value '[-] Error connecting to host'
-            }
-            if($session){
-                $output = (Invoke-SSHCommand -SSHSession $session -Command "$script | /bin/bash")
-                Add-Content -Path "$Location\$($_.ComputerName)" -Value $output.output
-                Remove-SSHSession -SSHSession $session | Out-Null
-            }
-        } | Wait-RSJob -ShowProgress
-        $errors=Get-RSJob | where {$_.HasErrors -eq $true}
-        if($errors){
-            Write-Output "[-] Failed connecting to following hosts"
-            Write-Output $errors
+    $Computers | start-rsjob -Throttle $Threads -Name {$_.computername} -ArgumentList $ScriptParams -ModulesToImport 'Posh-SSH' -ScriptBlock {
+        param($Inputargs)
+        $Script = $Inputargs.Script
+        $Location = $Inputargs.Location
+        $secpasswd = ConvertTo-SecureString $_.password -AsPlainText -Force
+        $creds = New-Object System.Management.Automation.PSCredential ($_.username, $secpasswd)
+        try{
+            $session = New-SSHSession -ComputerName $_.ComputerName -Credential $creds -Force -WarningAction SilentlyContinue
+        }catch{
+            Add-Content -Path "$Location\$($_.ComputerName)" -Value '[-] Error connecting to host'
         }
+        if($session){
+            $output = (Invoke-SSHCommand -SSHSession $session -Command "$script | /bin/bash")
+            Add-Content -Path "$Location\$($_.ComputerName)" -Value $output.output
+            Remove-SSHSession -SSHSession $session | Out-Null
+        }
+    } | Wait-RSJob -ShowProgress
 }
 function Get-GroupPolicyPassword {
     <#
