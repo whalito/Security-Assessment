@@ -89,7 +89,9 @@ function Invoke-SniperCore{
 
         [switch]$Tcp,
 
-        [switch]$Udp
+        [switch]$Udp,
+
+        [int32]$Threads
     )
     begin{
         if(!$tcp -and !$udp){
@@ -702,38 +704,35 @@ function Invoke-SniperCore{
             $nmap_script=$nmap_script -join ','
             if($udp){
                 $udp_ports=$open_ports.udp -join ','
-                nmap -sU -sC -sV -n -Pn -p $udp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
+                nmap -sU -sC -sV -n --max-retries 5 -Pn -p $udp_ports --script=$nmap_script -oA $path/scriptscan $computer
             }else{
                 $tcp_ports=$open_ports.tcp -join ','
-                nmap -sS -sC -sV -n -Pn -p $tcp_ports --script=$nmap_script -oA $path/nmap-scriptscan $computer
+                nmap -sS -sC -sV -n --max-retries 5 -Pn -p $tcp_ports --script=$nmap_script -oA $path/scriptscan $computer
             }
             try{
-                [xml]$services = (Get-Content $path/nmap-scriptscan.xml)
+                [xml]$services = (Get-Content $path/scriptscan.xml -ErrorAction Stop)
             }catch{
-                Write-Output "`n[-]Nmap Segmentation fault may occurred on $computer"
-                Add-Content -Value "Nmap Segmentation fault while script scanning may occurred on $computer" -Path $path/../../error.txt
+                Write-Output "`n[-]Nmap Segmentation fault on $computer"
+                Add-Content -Value "Nmap Segmentation fault on $computer" -Path $path/../../error.txt
+                throw
             }
             if($services){
                 Write-Output "`n[*] Creating Searchsploit Report"
-                searchsploit -v --nmap $path/nmap-scriptscan.xml 2>&1 | tee -a $path/searchsploit.txt
+                searchsploit -v --nmap $path/scriptscan.xml 2>&1 | tee -a $path/searchsploit.txt
                 Write-Output "`n[*] Looking up default password for each product"
                 $services.nmaprun.host.ports.port.service | where {$_.product}  | foreach {
                     $product = $_.product.tostring()
-                    try{
-                        Get-DefaultPassword $product -offline -ErrorAction SilentlyContinue
-                        Get-DefaultPassword ($product.split(' ')[0]) -offline -ErrorAction SilentlyContinue
-                        Get-DefaultPassword ($product.split(' ')[0..1]) -offline -ErrorAction SilentlyContinue
-                        Get-DefaultPassword ($product.split(' ')[1]) -offline -ErrorAction SilentlyContinue
-                    }catch{}
+                    Get-DefaultPassword $product -offline -ErrorAction SilentlyContinue
+                    Get-DefaultPassword ($product.split(' ')[0]) -offline -ErrorAction SilentlyContinue
+                    Get-DefaultPassword ($product.split(' ')[0..1]) -offline -ErrorAction SilentlyContinue
+                    Get-DefaultPassword ($product.split(' ')[1]) -offline -ErrorAction SilentlyContinue
                 } | Out-File -path $path/defaultpass.txt
             }
         }#end of script scanning script block
         
         #start one scanning job per machine
         Write-Output "[*] Starting scanning jobs $(get-date)"
-        (Get-ChildItem $output\machines\) | Start-RSJob -ScriptBlock $scanblock -ArgumentList $_ -ModulesToImport PowerHTML | Out-Null
-        #Get-RSJob | Wait-RSJob -ShowProgress
-        #Write-Output "[*] Scanning completed"
-        #get-date
+        (Get-ChildItem $output\machines\) | Start-RSJob -Name {$_.Name} -Throttle $Threads -ScriptBlock $scanblock -ArgumentList $_ -ModulesToImport PowerHTML | Out-Null
+        Write-Output "[*] Check status with Get-RsJob"
     }
 }
