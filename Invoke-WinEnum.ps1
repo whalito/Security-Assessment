@@ -4334,7 +4334,7 @@ function Invoke-ExtendedEnum {
         [string]
         $PowerUpSQL='https://raw.githubusercontent.com/NetSPI/PowerUpSQL/master/PowerUpSQL.ps1'
     )
-    $mssql = Get-WmiObject -Class Win32_Service  -Filter "Name='MSSQLSERVER'"
+    $mssql = Get-WmiObject -Class Win32_Service  -Filter "Name LIKE 'MSSQL%'"
     if($mssql){
         Write-Output "[*] Starting MSSQL Audit"
         try{
@@ -4390,7 +4390,7 @@ function Invoke-ExtendedEnum {
             }
         }
     }
-    $iis = Get-WmiObject -Class Win32_Service  -Filter "Name='W3svc'"
+    $iis = Get-WmiObject -Class Win32_Service  -Filter "Name LIKE 'W3svc%'"
     if($iis){
         Write-Output "`n[*] Starting IIS testing"
         #https://powersploit.readthedocs.io/en/latest/Privesc/Get-WebConfig/
