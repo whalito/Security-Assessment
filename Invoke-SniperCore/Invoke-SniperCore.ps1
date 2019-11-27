@@ -70,7 +70,7 @@ function Invoke-SniperCore{
         [ValidateScript({Test-Path -Path $_})]
         [string]$NmapXML,
         
-        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
         [string]$Output = "$(Get-Location)/output",
 
         [string]$HydraThreads,
@@ -118,6 +118,7 @@ function Invoke-SniperCore{
             }
             $nmap = $NmapXML
         }
+        #$output = (Get-ChildItem $Output).fullname
         #Check dependencies
         @(
             'PowerHTML'
@@ -230,7 +231,7 @@ function Invoke-SniperCore{
         foreach($scan in $nmap_xml){
             $hostname = $scan.hostnames.hostname.name
             if(!$hostname){
-                $hostname = $scan.address.addr
+                $hostname = ($scan.address | where {$_.addrtype -match 'ipv4'}).addr
             }
             New-Item -ItemType Directory -ErrorAction SilentlyContinue $Output/machines/$hostname | Out-Null
             $report = $header + $scan.OuterXml + $footer
