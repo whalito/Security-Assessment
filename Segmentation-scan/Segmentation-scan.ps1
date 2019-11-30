@@ -27,7 +27,7 @@ function Get-AddressOverview{
         foreach ($x in $xml){
             if(Test-Path $x){
                 try{
-                    [xml]$xml=Get-Content $x
+                    [xml]$xml=Get-Content $x -ErrorAction Stop
                 }catch{
                     Write-Output "[-] Failed to open $x"
                     return
@@ -52,12 +52,12 @@ function Get-AddressOverview{
                         }
                         foreach($port in $up.ports.port){
                             if($port.state.state -contains 'open'){
-                                $ports.add([string]$port.portid)
+                                $ports.add([string]$port.portid) | Out-Null
                             }
                         }
                         $obj=[pscustomobject]@{
                             Hostname = $hostname
-                            IP = $up.address.addr
+                            IP = ($up.address | where {$_.addrtype -match 'ipv4'}).addr
                             OS = $os
                             Port = $ports
                         }
@@ -102,7 +102,7 @@ function Get-ServiceOverview{
         foreach ($x in $xml){
             if(Test-Path $x){
                 try{
-                    [xml]$xml=Get-Content $x
+                    [xml]$xml=Get-Content $x -ErrorAction Stop
                 }catch{
                     Write-Output "[-] Failed to open $x"
                     return
@@ -133,7 +133,7 @@ function Get-ServiceOverview{
                                 }
                                 $obj = [pscustomobject]@{
                                     Hostname = $hostname
-                                    IP = $up.address.addr
+                                    IP = ($up.address | where {$_.addrtype -match 'ipv4'}).addr
                                     OS = $os
                                     Port = $port.portid
                                     Service = $Service
@@ -253,14 +253,14 @@ function Get-NmapIP{
         foreach ($x in $xml){
             if(Test-Path $x){
                 try{
-                    [xml]$xml=Get-Content $x
+                    [xml]$xml=Get-Content $x -ErrorAction Stop
                 }catch{
                     return
                 }
                 $xml.nmaprun.host | foreach {
                     $up = $_| where {$_.ports.port.state.state -contains 'open'}
                     if($up){
-                        $table.add($up.address.addr) | Out-Null
+                        $table.add(($up.address | where {$_.addrtype -match 'ipv4'}).addr) | Out-Null
                     }
                 }
             }else{
@@ -299,7 +299,7 @@ function Get-NmapPort{
         foreach ($x in $xml){
             if(Test-Path $x){
                 try{
-                    [xml]$xml=Get-Content $x
+                    [xml]$xml=Get-Content $x -ErrorAction Stop
                 }catch{
                     return
                 }
