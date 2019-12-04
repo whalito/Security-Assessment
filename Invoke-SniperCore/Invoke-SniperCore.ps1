@@ -731,7 +731,10 @@ function Invoke-SniperCore{
         
         #start one scanning job per machine
         Write-Output "[*] Starting scanning jobs $(get-date)"
-        (Get-ChildItem $output\machines\) | where {$_.name -notin $ExcludeComputerList} | Start-RSJob -Name {$_.Name} -Throttle $Threads -ScriptBlock $scanblock -ArgumentList $_ -ModulesToImport PowerHTML | Out-Null
+        if($ExcludeComputerList){
+            $exclude = Get-Content $ExcludeComputerList
+        }
+        (Get-ChildItem $output\machines\) | where {$_.name -notin $exclude} | Start-RSJob -Name {$_.Name} -Throttle $Threads -ScriptBlock $scanblock -ArgumentList $_ -ModulesToImport PowerHTML | Out-Null
         Write-Output "[*] Check status with Get-RsJob"
     }
 }
