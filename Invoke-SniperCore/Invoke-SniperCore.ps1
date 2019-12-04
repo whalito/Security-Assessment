@@ -91,17 +91,15 @@ function Invoke-SniperCore{
 
         [switch]$Udp,
 
-        [int32]$Threads
+        [int32]$Threads = 10
     )
     begin{
         if(!$tcp -and !$udp){
             write-output "[*] No TCP/UDP switch was used, doing TCP scan"
             $tcp = $true
         }
-        if($HydraThreads){
-            $threads = $HydraThreads
-        }else{
-            $threads = '4'
+        if(!$HydraThreads){
+            $HydraThreads = '4'
         }
         if(-not(Test-Path $output)){
             New-Item -ItemType Directory -ErrorAction SilentlyContinue $Output | Out-Null
@@ -179,7 +177,7 @@ function Invoke-SniperCore{
         if(-not($NmapXML)){
             #https://www.poftut.com/nmap-timing-performance/
             #https://nmap.org/book/man-performance.html
-            $HostCount = (cat $ComputerList | Measure-Object -Line).lines
+            $HostCount = (Get-Content $ComputerList | Measure-Object -Line).lines
             $min_hostgroup = $HostCount / 4
             $min_paralell = $HostCount / 8
             if($min_paralell -lt 10){
@@ -225,7 +223,7 @@ function Invoke-SniperCore{
         }catch{
             Write-Output "[-] Could not open $nmap"
             Write-Output "[-] $($_.Exception.Message)"
-            return
+            throw
         }
         $nmap_xml = $nmap_overall.nmaprun.host
         foreach($scan in $nmap_xml){
@@ -363,8 +361,8 @@ function Invoke-SniperCore{
                 #ftp
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/ftp | Out-Null
-                    hydra -C ./wordlist/ftp-default-userpass.txt $computer ftp -t $threads -e ns | tee -a $path/ftp/hydra.txt
-                    hydra -L ./wordlist/ftp_defuser.lst -P ./wordlist/ftp_defpass.lst $computer ftp -t $threads -e ns | tee -a $path/ftp/hydra.txt
+                    hydra -C ./wordlist/ftp-default-userpass.txt $computer ftp -t $HydraThreads -e ns | tee -a $path/ftp/hydra.txt
+                    hydra -L ./wordlist/ftp_defuser.lst -P ./wordlist/ftp_defpass.lst $computer ftp -t $HydraThreads -e ns | tee -a $path/ftp/hydra.txt
                 }
             }
             if($tcp_22){
@@ -384,8 +382,8 @@ function Invoke-SniperCore{
                 'telnet-encryption' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/telnet | Out-Null
-                    hydra -C ./wordlist/telnet-default-userpass.txt $computer telnet -t $threads -e ns | tee -a $path/telnet/hydra.txt
-                    hydra -L ./wordlist/telnet_defuser.lst -P ./wordlist/telnet_defpass.lst $computer telnet -t $threads -e ns | tee -a $path/telnet/hydra.txt
+                    hydra -C ./wordlist/telnet-default-userpass.txt $computer telnet -t $HydraThreads -e ns | tee -a $path/telnet/hydra.txt
+                    hydra -L ./wordlist/telnet_defuser.lst -P ./wordlist/telnet_defpass.lst $computer telnet -t $HydraThreads -e ns | tee -a $path/telnet/hydra.txt
                 }
             }
             if($tcp_25){
@@ -393,7 +391,7 @@ function Invoke-SniperCore{
                 'smtp-open-relay' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/smtp | Out-Null
-                    hydra -L ./wordlist/smtp_defuser.lst -P ./wordlist/smtp_defpass.lst $computer smtp -t $threads -e ns | tee -a $path/smtp/hydra.txt
+                    hydra -L ./wordlist/smtp_defuser.lst -P ./wordlist/smtp_defpass.lst $computer smtp -t $HydraThreads -e ns | tee -a $path/smtp/hydra.txt
                 }
             }
             if($tcp_53){}
@@ -431,7 +429,7 @@ function Invoke-SniperCore{
                 #pop3
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/pop3 | Out-Null
-                    hydra -L ./wordlist/pop_defuser.lst -P ./wordlist/pop_defpass.lst $computer pop -t $threads -e ns | tee -a $path/pop3/hydra.txt
+                    hydra -L ./wordlist/pop_defuser.lst -P ./wordlist/pop_defpass.lst $computer pop -t $HydraThreads -e ns | tee -a $path/pop3/hydra.txt
                 }
             }
             if($tcp_111){
@@ -467,7 +465,7 @@ function Invoke-SniperCore{
                 'snmp-ios-config' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/snmp | Out-Null
-                    hydra -P ./wordlist/snmp-strings.txt $computer snmp -S 162 -t $threads -e ns | tee -a $path/snmp/hydra.txt
+                    hydra -P ./wordlist/snmp-strings.txt $computer snmp -S 162 -t $HydraThreads -e ns | tee -a $path/snmp/hydra.txt
                 }
             }
             if($tcp_389){
@@ -554,14 +552,14 @@ function Invoke-SniperCore{
                 }
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/mssql | Out-Null
-                    hydra -C ./wordlist/mssql-default-userpass.txt $computer mysql -t $threads -e ns | tee -a $path/mssql/hydra.txt
+                    hydra -C ./wordlist/mssql-default-userpass.txt $computer mysql -t $HydraThreads -e ns | tee -a $path/mssql/hydra.txt
                 }
             }
             if($tcp_1521){
                 #oracle
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/oracle | Out-Null
-                    hydra -C ./wordlist/oracle-default-userpass.txt $computer oracle -S 1521 -t $threads -e ns | tee -a $path/oracle/hydra.txt
+                    hydra -C ./wordlist/oracle-default-userpass.txt $computer oracle -S 1521 -t $HydraThreads -e ns | tee -a $path/oracle/hydra.txt
                 }
             }
             if($tcp_1524){}
@@ -580,7 +578,7 @@ function Invoke-SniperCore{
                 'mysql-empty-password' | ForEach-Object {$nmap_script.add($_) | Out-Null}
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/mysql | Out-Null
-                    hydra -C ./wordlist/mysql-default-userpass.txt $computer mysql -t $threads -e ns | tee -a $path/mysq/hydra.txt
+                    hydra -C ./wordlist/mysql-default-userpass.txt $computer mysql -t $HydraThreads -e ns | tee -a $path/mysq/hydra.txt
                 }
                 
             }
@@ -629,7 +627,7 @@ function Invoke-SniperCore{
                 #postgresql
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/postgres | Out-Null
-                    hydra -C ./wordlist/postgres-default-userpass.txt $computer postgres -t $threads -e ns | tee -a $path/postgres/hydra.txt
+                    hydra -C ./wordlist/postgres-default-userpass.txt $computer postgres -t $HydraThreads -e ns | tee -a $path/postgres/hydra.txt
                 }
             }
             if($tcp_5555){}
@@ -638,14 +636,14 @@ function Invoke-SniperCore{
                 #vnc
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/vnc | Out-Null
-                    hydra -p ./wordlist/vnc-default-pass.txt $computer postgres -s 5900 -t $threads -e ns | tee -a $path/vnc/hydra.txt
+                    hydra -p ./wordlist/vnc-default-pass.txt $computer postgres -s 5900 -t $HydraThreads -e ns | tee -a $path/vnc/hydra.txt
                 }
             }
             if($tcp_5901){
                 #vnc
                 if($Hydra){
                     New-Item -ItemType Directory -ErrorAction SilentlyContinue $path/vnc | Out-Null
-                    hydra -p ./wordlist/vnc-default-pass.txt $computer postgres -s 59001 -t $threads -e ns | tee -a $path/vnc/hydra.txt
+                    hydra -p ./wordlist/vnc-default-pass.txt $computer postgres -s 59001 -t $HydraThreads -e ns | tee -a $path/vnc/hydra.txt
                 }
             }
             if($tcp_5984){}
@@ -733,7 +731,7 @@ function Invoke-SniperCore{
         
         #start one scanning job per machine
         Write-Output "[*] Starting scanning jobs $(get-date)"
-        (Get-ChildItem $output\machines\) | Start-RSJob -Name {$_.Name} -Throttle $Threads -ScriptBlock $scanblock -ArgumentList $_ -ModulesToImport PowerHTML | Out-Null
+        (Get-ChildItem $output\machines\) | where {$_.name -notin $ExcludeComputerList} | Start-RSJob -Name {$_.Name} -Throttle $Threads -ScriptBlock $scanblock -ArgumentList $_ -ModulesToImport PowerHTML | Out-Null
         Write-Output "[*] Check status with Get-RsJob"
     }
 }
