@@ -1,4 +1,25 @@
 function ConvertFrom-CisHtml{
+    <#
+    .EXAMPLE
+    PS > gci *html | foreach {ConvertFrom-CisHtml -html $_.fullname -output "C:\$($_.name)"}
+
+    Found 0 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_2016_Benchmark-XCCDF-.html
+    Found 6 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_Access_2016_Benchmark-XCCDF-.html
+    Found 26 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_Excel_2016_Benchmark-XCCDF-.html
+    Found 39 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_Outlook_2016_Benchmark-XCCDF-.html
+    Found 12 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_PowerPoint_2016_Benchmark-XCCDF-.html
+    Found 19 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_Word_2016_Benchmark-XCCDF-.html
+    Found 195 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Windows_10_Enterprise_Release_1803_Benchmark-XCCDF-.html
+    Found 196 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Windows_10_Enterprise_Release_1809_Benchmark-XCCDF.html
+    #>
     param(
         [CmdletBinding()]
         [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true)]
