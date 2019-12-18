@@ -14,9 +14,9 @@ function ConvertFrom-CisHtml{
         Write-Output "install-module PSWriteWord"
         throw
     }
-    $html = Get-Content $html -Raw
+    $html_ = Get-Content $html -Raw
     $rep = New-Object -com "HTMLFILE"
-    $rep.IHTMLDocument2_write($html)
+    $rep.IHTMLDocument2_write($html_)
     $WordDocument = New-WordDocument $output
     $count = 0
     foreach($i in ($rep.body.getElementsByClassName('Rule'))){
