@@ -2960,3 +2960,133 @@ function Invoke-DomainEnum{
         Invoke-PingCastle -Domain $domain -output (Get-Location) -Pingcastle '.\PingCastle.exe'
     }
 }
+
+function Get-WeakPasswords{
+    <#
+    .DESCRIPTION
+    Find weak passwords from secretsdump NTDS output & hashcat potfile and imports it to bloodhound
+
+    MATCH (n:User {enabled:True}),(m:Group {name:"DOMAIN ADMINS@FORG.SE"}),p=shortestPath((n)-[*1..]->(m)) where EXISTS(n.userpassword) RETURN p
+    MATCH (n:User {enabled:True}),(m:Group {name:"DOMAIN ADMINS@FORG.SE"}),p=allshortestpaths((n)-[r:MemberOf|HasSession|AdminTo|AllExtendedRights|AddMember|ForceChangePassword|GenericAll|GenericWrite|Owns|WriteDacl|WriteOwner|CanRDP|AllowedToDelegate|ReadLAPSPassword|Contains|GpLink|AddAllowedToAct|AllowedToAct|SQLAdmin*1..]->(m)) where EXISTS(n.userpassword) RETURN p
+    #>
+    param(
+        [CmdletBinding()]
+        [Parameter(Mandatory=$True)]           
+        [string]$NTDSdump,
+
+        [Parameter(Mandatory=$True)]           
+        [string]$POTFile,
+        
+        [string]$Regex = "winter|fall|spring|summer|vinter|höst|vår|sommar|berlin|london|boston|password|stockholm|stockholm",
+
+        [swithch]$Bloodhound,
+
+        [string]$neo4jUser = 'neo4j',
+
+        [string]$neo4jpassword = (ConvertTo-SecureString -String "neo4jj" -AsPlainText -Force),
+
+        [string]$neo4jurl = 'http://127.0.0.1:7474'
+    )
+    try{
+        Import-Module PSNeo4j -ErrorAction stop
+    }catch{
+        Write-Output "[-] Install-module PSNeo4j -force"
+        throw
+    }
+    $Cred = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $neo4jUser, $neo4jpassword
+    Set-PSNeo4jConfiguration -Credential $Cred -BaseUri  $neo4jurl
+    $count = 0
+    Get-Content .\out.txt.ntds |foreach {
+        $vals = $_.split(':')
+        if($vals){
+            $usernameFull = $vals[0]
+            $lm_hash = $vals[2]
+            $nt_hash = $vals[3]
+            $username = $usernameFull.split('\\')[-1]
+            if(-not $usernameFull.EndsWith('$')){
+                Write-Verbose "$username $lm_hash $nt_hash"
+                Get-Content .\hashcat.potfile | foreach {
+                    $nt,$pw = $_.split(':')
+                    if($nt -like $nt_hash){
+                        if($pw -match $regex){
+                            Write-Output "$username : $pw"
+                            if($Bloodhound){
+                                $query = @"
+MATCH (n:User)
+WHERE n.name =~ '${username}.*'
+SET n.userpassword = '${pw}'
+RETURN n.name,n.userpassword
+"@
+                                Invoke-Neo4jQuery -Query $query |  Format-List -Property Neo4jData -Force
+                            }
+                            return
+                        }
+                        return
+                    }
+                }
+            }
+        }
+    }
+    Write-Output "Found $count weak passwords"
+}
+function ConvertFrom-CisHtml{
+    <#
+    .EXAMPLE
+    PS > gci *html | foreach {ConvertFrom-CisHtml -html $_.fullname -output "C:\$($_.name)"}
+    Found 0 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_2016_Benchmark-XCCDF-.html
+    Found 6 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_Access_2016_Benchmark-XCCDF-.html
+    Found 26 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_Excel_2016_Benchmark-XCCDF-.html
+    Found 39 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_Outlook_2016_Benchmark-XCCDF-.html
+    Found 12 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_PowerPoint_2016_Benchmark-XCCDF-.html
+    Found 19 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Office_Word_2016_Benchmark-XCCDF-.html
+    Found 195 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Windows_10_Enterprise_Release_1803_Benchmark-XCCDF-.html
+    Found 196 improvements
+    saved to C:\LAPTOP-CIS_Microsoft_Windows_10_Enterprise_Release_1809_Benchmark-XCCDF.html
+    #>
+    param(
+        [CmdletBinding()]
+        [Parameter(Mandatory=$true, Position=0, ValueFromPipeline=$true)]
+        [ValidateScript({Test-Path -Path $_ })]
+        $html,
+
+        [Parameter(Mandatory=$true, Position=1)]
+        $output
+    )
+    if(get-module PSWriteWord -ListAvailable){
+        import-module PSWriteWord
+    }else{
+        Write-Output "install-module PSWriteWord"
+        throw
+    }
+    $html_ = Get-Content $html -Raw
+    $rep = New-Object -com "HTMLFILE"
+    $rep.IHTMLDocument2_write($html_)
+    $WordDocument = New-WordDocument $output
+    $count = 0
+    foreach($i in ($rep.body.getElementsByClassName('Rule'))){
+        $doc = New-Object -com "HTMLFILE"
+        $doc.IHTMLDocument2_write(($i | select -ExpandProperty innerhtml))
+        $res = ($doc.body.getElementsByClassName('outcome') | select -ExpandProperty outertext)
+        if(($res) -and ($res -notmatch 'pass')){
+            $count +=1
+            Add-WordText -WordDocument $WordDocument -FontSize 12 -SpacingBefore 15 -Bold $true -Supress $True -Text 'Issue:'
+            Add-WordText -WordDocument $WordDocument -FontSize 12 -SpacingBefore 15 -Supress $True -Text ($doc.body.getElementsByClassName('ruleTitle') | select -ExpandProperty outertext)
+            Add-WordText -WordDocument $WordDocument -FontSize 12 -SpacingBefore 15 -Bold $true -Supress $True -Text 'Observation:'
+            Add-WordText -WordDocument $WordDocument -FontSize 12 -SpacingBefore 15 -Supress $True -Text (($doc.body.getElementsByClassName('description') | where {$_.outerhtml -match '<DIV class=bold>Description:</DIV>'}).outertext.replace('Description:','').trim())
+            Add-WordText -WordDocument $WordDocument -FontSize 12 -SpacingBefore 15 -Bold $true -Supress $True -Text 'Impact:'
+            Add-WordText -WordDocument $WordDocument -FontSize 12 -SpacingBefore 15 -Supress $True -Text ($doc.body.getElementsByClassName('rationale') | select -ExpandProperty outertext)
+            Add-WordText -WordDocument $WordDocument -FontSize 12 -SpacingBefore 15 -Bold $true -Supress $True -Text 'Recommendation:'
+            Add-WordText -WordDocument $WordDocument -FontSize 12 -SpacingBefore 15 -Supress $True -Text ($doc.body.getElementsByClassName('fixtext') | select -ExpandProperty outertext)
+        }
+    }
+    $out = Save-WordDocument $WordDocument -Language 'en-US'
+    Write-Output "Found $count improvements"
+    Write-Output "saved to $out"
+}
