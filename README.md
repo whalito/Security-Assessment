@@ -45,27 +45,18 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 	Invoke-WindowsWMI	  -  Run PowerShell on multiple hosts simultaneously with WMI
 	Invoke-WindowsPS	  -  Run PowerShell on multiple hosts simultaneously with PSRemote
 	Invoke-WindowsSMB	  -  Run PowerShell on multiple hosts with WMI and output over SMB
+	Invoke-Grouper2		  -  GPO Audit
+	Invoke-PingCastle	  -  Runs multiple pingcastle modules
+	Invoke-DomainEnum	  -  Runs multiple checks on the domain
 	Get-BlueKeepStatus	  -  PingCastle Bluekeep script
 	Get-SpoolStatus		  -  PingCastle Print Spooler status script
 	Get-RemoteCertificates	  -  Download all CA and Root Certificates from a remote host using OpenRemoteBaseKey
 	Get-DomainCertificates	  -  Download all published CA, Root and CRL certificates
 	Get-DomainExchangeVersion -  Get exchange version from ADSI and check if vuln to privexchange
 	Get-DefaultPassword	  -  Search for default passwords for a specific vendor/product
+	Get-WeakPasswords	  -  Find weak passwords from secretsdump output & hashcat potfile and imports it to bloodhound
 	New-SYSVOLZip		  -  Zip Sysvol for Grouper2
-	Invoke-Grouper2		  -  GPO Audit
-	Invoke-PingCastle	  -  Runs multiple pingcastle modules
-	Invoke-DomainEnum	  -  Runs multiple checks on the domain
-* Domain and Forest Trust
-* CPassword in Sysvol
-* Active Directory Integrated DNS Wildcard Record
-* Password Policy
-* MachineAccountQuota
-* Null and anonymous SMB login on DCs
-* Get-DomainExchangeVersion
-* Get-DomainCertificates
-* Invoke-Grouper2
-* Invoke-Bloodhound
-* Invoke-PingCastle
+	ConvertFrom-CisHtml	  -  Convert CIS html report to docx
 ### bloodhoundanalytics.py
 	Gather Active Directory statistics from BloodHound data
 # Software
