@@ -15,7 +15,7 @@ Function Get-SpoolStatus {
 	dc            True
 	#>
 	Param(
-        [parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [string[]]$ComputerName
 	)
 	$sourceSpooler = @"
@@ -754,7 +754,7 @@ function Get-BlueKeepStatus{
 	PS > Get-BlueKeepStatus -ComputerName localhost
 	#>
 	Param(
-        [parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true)]
         [string[]]$ComputerName
 	)
 	$source = @"
@@ -2569,7 +2569,7 @@ function Get-DomainExchangeVersion {
                 $domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
             }catch{
                 Write-Output "[-] $($_.Exception.Message)"
-                Write-Output "Use runas.exe"
+                Write-Output "Use runas.exe with -domain"
                 return
             }
         }
@@ -2669,6 +2669,7 @@ Function Invoke-PingCastle{
     )
     begin{
         if(!(test-path $output)){
+            Write-Output "[*]Creating output folder.."
             New-Item -ItemType Directory -Path $output | Out-Null
         }
         #Set variables
@@ -2677,7 +2678,7 @@ Function Invoke-PingCastle{
                 $current_domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
                 $Domain = $current_domain.Name
             }catch{
-                Write-Output "Use runas.exe"
+                Write-Output "Use runas.exe with -Domain flag"
                 throw
             }
         }
@@ -2688,11 +2689,12 @@ Function Invoke-PingCastle{
             "--scanner laps_bitlocker --server $Domain"
             "--scanner nullsession --server $Domain"
             "--scanner nullsession-trust --server $Domain"
+            "--scanner aclcheck --server $Domain"
             "--scanner share --server $Domain"
             "--scanner smb --server $Domain"
             "--scanner spooler --server $Domain"
             "--scanner startup --server $Domain"
-            "--scanner antivirus --server $Domainls "
+            "--scanner antivirus --server $Domain "
         ) | foreach {
                 "PingCastle.exe $_"
                 Start-Process $Pingcastle -ArgumentList $_ -WorkingDirectory $output -WindowStyle Normal
@@ -2960,7 +2962,6 @@ function Invoke-DomainEnum{
         Invoke-PingCastle -Domain $domain -output (Get-Location) -Pingcastle '.\PingCastle.exe'
     }
 }
-
 function Get-WeakPasswords{
     <#
     .DESCRIPTION
