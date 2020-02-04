@@ -2928,10 +2928,10 @@ function Get-SysInfo {
     Get basic system information from the host
     #>
     try{
-    $os_info = Get-WmiObject Win32_OperatingSystem
+        $os_info = Get-WmiObject Win32_OperatingSystem
     }catch{}
     try{
-    $date = Get-Date
+        $date = Get-Date
     }catch{}
     try{
         $psv2 = (Get-WindowsOptionalFeature -Online -FeatureName MicrosoftWindowsPowerShellV2 -ErrorAction Stop).state
@@ -3290,9 +3290,7 @@ function Get-ModifiablePath {
                     }
                 }
             }
-            #$CandidatePaths makes the scan from to be 4 seconds to 7.5 seconds
-            $CandidatePaths | Sort-Object -Unique | ForEach-Object {
-                $CandidatePath = $_
+            foreach($CandidatePath in ($CandidatePaths | Sort-Object -Unique)){
                 if (-not(Test-Path $CandidatePath)){
                     return
                 }
@@ -3301,34 +3299,20 @@ function Get-ModifiablePath {
                     if($SkipUser){
                         foreach($Admin in $SkipUser){
                             if($_.IdentityReference -match $Admin){
-                                $Skip = $true
+                                return
                             }
                         }
-                        if(-not($Skip)){
-                            $Permissions = $AccessMask.Keys | Where-Object { $FileSystemRights -band $_ } | ForEach-Object { $AccessMask[$_] }
-                            # the set of permission types that allow for modification
-                            $Comparison = Compare-Object -ReferenceObject $Permissions -DifferenceObject @('GenericWrite', 'GenericAll', 'MaximumAllowed', 'WriteOwner', 'WriteDAC', 'WriteData/AddFile', 'AppendData/AddSubdirectory') -IncludeEqual -ExcludeDifferent
-                            if ($Comparison) {
-                                $Out = New-Object PSObject
-                                $Out | Add-Member Noteproperty 'ModifiablePath' $CandidatePath
-                                $Out | Add-Member Noteproperty 'IdentityReference' $_.IdentityReference
-                                $Out | Add-Member Noteproperty 'Permissions' $($Permissions -join ', ')
-                                $Out.PSObject.TypeNames.Insert(0, 'PowerUp.ModifiablePath')
-                                return $Out
-                            }
-                        }
-                    }else{
-                        $Permissions = $AccessMask.Keys | Where-Object { $FileSystemRights -band $_ } | ForEach-Object { $AccessMask[$_] }
-                        # the set of permission types that allow for modification
-                        $Comparison = Compare-Object -ReferenceObject $Permissions -DifferenceObject @('GenericWrite', 'GenericAll', 'MaximumAllowed', 'WriteOwner', 'WriteDAC', 'WriteData/AddFile', 'AppendData/AddSubdirectory') -IncludeEqual -ExcludeDifferent
-                        if ($Comparison) {
-                            $Out = New-Object PSObject
-                            $Out | Add-Member Noteproperty 'ModifiablePath' $CandidatePath
-                            $Out | Add-Member Noteproperty 'IdentityReference' $_.IdentityReference
-                            $Out | Add-Member Noteproperty 'Permissions' $($Permissions -join ', ')
-                            $Out.PSObject.TypeNames.Insert(0, 'PowerUp.ModifiablePath')
-                            return $Out
-                        }
+                    }
+                    $Permissions = $AccessMask.Keys | Where-Object { $FileSystemRights -band $_ } | ForEach-Object { $AccessMask[$_] }
+                    # the set of permission types that allow for modification
+                    $Comparison = Compare-Object -ReferenceObject $Permissions -DifferenceObject @('GenericWrite', 'GenericAll', 'MaximumAllowed', 'WriteOwner', 'WriteDAC', 'WriteData/AddFile', 'AppendData/AddSubdirectory') -IncludeEqual -ExcludeDifferent
+                    if ($Comparison) {
+                        $Out = New-Object PSObject
+                        $Out | Add-Member Noteproperty 'ModifiablePath' $CandidatePath
+                        $Out | Add-Member Noteproperty 'IdentityReference' $_.IdentityReference
+                        $Out | Add-Member Noteproperty 'Permissions' $($Permissions -join ', ')
+                        $Out.PSObject.TypeNames.Insert(0, 'PowerUp.ModifiablePath')
+                        $Out
                     }
                 }
             }
