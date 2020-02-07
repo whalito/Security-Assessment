@@ -400,6 +400,57 @@ function Get-NonstandardService {
     }
     return $h
 }
+function Get-NonstandardTask{
+    <#
+        https://powershelladministrator.com/2014/04/30/get-all-non-default-scheduled-tasks/
+    #>
+    #Get all scheduled tasks on the system in a Csv format
+    $Tasks = schtasks /query /v /fo csv | ConvertFrom-Csv
+    #Filtering out all Windows tasks for Windows 2k3 and 2k12 (and 2k8?)
+    $ScheduledTasks = $Tasks | Where-Object { $_.HostName -eq $env:COMPUTERNAME -and $_.Author -ne "N/A" -and $_.'Next Run Time' -ne "N/A" -and $_.Author -notmatch "Microsoft" -and $_.TaskName -notmatch "User_Feed_Synchronization" }
+    # -and $_.'Scheduled Task State' -ne "Disabled" # <-- Add this to the where-object selection in the line above to filter out disabled tasks as well
+
+    Foreach($ScheduledTask in $ScheduledTasks)
+    {
+        $Tasktext = ""
+        $ScheduledTask.'TaskName'.Substring($ScheduledTask.'TaskName'.IndexOf("\")+1)
+        $ScheduledTask.'Start In'
+        $ScheduledTask.'Task To Run'
+        #In case of W2k12 (and W2k8?)
+        If($ScheduledTask.'Schedule Type')
+        {
+            Switch($ScheduledTask.'Schedule Type')
+            {
+                "Hourly " { $Tasktext = $ScheduledTask.'Schedule Type' + "at " + $ScheduledTask.'Start Time' }
+                "Daily " { $Tasktext = $ScheduledTask.'Schedule Type' + "at " + $ScheduledTask.'Start Time' }
+                "Weekly" { $Tasktext = $ScheduledTask.'Schedule Type' + " on every " + $ScheduledTask.Days + " at " + $ScheduledTask.'Start Time' }
+                "Monthly"
+                {
+                    If($ScheduledTask.Months -eq "Every month") { $Tasktext = $ScheduledTask.'Schedule Type' + " on day " + $ScheduledTask.Days + " at " + $ScheduledTask.'Start Time'}
+                    Else { $Tasktext = "Yearly on day " + $ScheduledTask.Days + " of " + $ScheduledTask.Months + " at " + $ScheduledTask.'Start Time' }
+                }
+            }
+        }
+        #In case of W2k3
+        If($ScheduledTask.'Scheduled Type')
+        {
+            Switch($ScheduledTask.'Scheduled Type')
+            {
+                "Hourly " { $Tasktext = $ScheduledTask.'Scheduled Type' + "at " + $ScheduledTask.'Start Time' }
+                "Daily " { $Tasktext = $ScheduledTask.'Scheduled Type' + "at " + $ScheduledTask.'Start Time' }
+                "Weekly" { $Tasktext = $ScheduledTask.'Scheduled Type' + " on every " + $ScheduledTask.Days + " at " + $ScheduledTask.'Start Time' }
+                "Monthly"
+                {
+                    If($ScheduledTask.Months -eq "JAN,FEB,MAR,APR,MAY,JUN,JUL,AUG,SEP,OCT,NOV,DEC") { $Tasktext = $ScheduledTask.'Scheduled Type' + " on day " + $ScheduledTask.Days + " at " + $ScheduledTask.'Start Time' }
+                    Else { $Tasktext = "Yearly on day " + $ScheduledTask.Days + " of " + $ScheduledTask.Months + " at " + $ScheduledTask.'Start Time' }
+                }
+            }
+        }
+        #This line can be removed if the filter excludes disabled tasks
+        If($ScheduledTask.'Scheduled Task State' -eq "Disabled") { $Tasktext = "Disabled" }
+        $Tasktext
+    }
+}
 function Get-DotNetServices {
     <#
     https://github.com/leechristensen/Random/blob/master/PowerShellScripts/Get-DotNetServices.ps1
@@ -3211,10 +3262,6 @@ function Get-ModifiablePath {
         [String[]]
         $Path,
 
-        [Alias('LiteralPaths')]
-        [Switch]
-        $Literal,
-
         [string[]]$SkipUser
     )
 
@@ -3244,8 +3291,8 @@ function Get-ModifiablePath {
         }
     }
     PROCESS {
+        $CandidatePaths = @()
         ForEach($TargetPath in $Path) {
-            $CandidatePaths = @()
             # possible separator character combinations
             $SeparationCharacterSets = @('"', "'", ' ', "`"'", '" ', "' ", "`"' ")
             if ($PSBoundParameters['Literal']) {
@@ -3290,30 +3337,24 @@ function Get-ModifiablePath {
                     }
                 }
             }
-            foreach($CandidatePath in ($CandidatePaths | Sort-Object -Unique)){
-                if (-not(Test-Path $CandidatePath)){
+        }
+        $CandidatePaths = $CandidatePaths | where {test-path $_} | Sort-Object -Unique
+        foreach($CandidatePath in $CandidatePaths){
+            Get-Acl -Path $CandidatePath | Select-Object -ExpandProperty Access | Where-Object {($_.AccessControlType -match 'Allow')} | ForEach-Object {
+                if((($_.IdentityReference -split "\\")[-1]) -in $SkipUser){
                     return
                 }
-                Get-Acl -Path $CandidatePath | Select-Object -ExpandProperty Access | Where-Object {($_.AccessControlType -match 'Allow')} | ForEach-Object {
-                    $FileSystemRights = $_.FileSystemRights.value__
-                    if($SkipUser){
-                        foreach($Admin in $SkipUser){
-                            if($_.IdentityReference -match $Admin){
-                                return
-                            }
-                        }
-                    }
-                    $Permissions = $AccessMask.Keys | Where-Object { $FileSystemRights -band $_ } | ForEach-Object { $AccessMask[$_] }
-                    # the set of permission types that allow for modification
-                    $Comparison = Compare-Object -ReferenceObject $Permissions -DifferenceObject @('GenericWrite', 'GenericAll', 'MaximumAllowed', 'WriteOwner', 'WriteDAC', 'WriteData/AddFile', 'AppendData/AddSubdirectory') -IncludeEqual -ExcludeDifferent
-                    if ($Comparison) {
-                        $Out = New-Object PSObject
-                        $Out | Add-Member Noteproperty 'ModifiablePath' $CandidatePath
-                        $Out | Add-Member Noteproperty 'IdentityReference' $_.IdentityReference
-                        $Out | Add-Member Noteproperty 'Permissions' $($Permissions -join ', ')
-                        $Out.PSObject.TypeNames.Insert(0, 'PowerUp.ModifiablePath')
-                        $Out
-                    }
+                $FileSystemRights = $_.FileSystemRights.value__
+                $Permissions = $AccessMask.Keys | Where-Object { $FileSystemRights -band $_ } | ForEach-Object { $AccessMask[$_] }
+                # the set of permission types that allow for modification
+                $Comparison = Compare-Object -ReferenceObject $Permissions -DifferenceObject @('GenericWrite', 'GenericAll', 'MaximumAllowed', 'WriteOwner', 'WriteDAC', 'WriteData/AddFile', 'AppendData/AddSubdirectory') -IncludeEqual -ExcludeDifferent
+                if ($Comparison) {
+                    $Out = New-Object PSObject
+                    $Out | Add-Member Noteproperty 'ModifiablePath' $CandidatePath
+                    $Out | Add-Member Noteproperty 'IdentityReference' $_.IdentityReference
+                    $Out | Add-Member Noteproperty 'Permissions' $($Permissions -join ', ')
+                    $Out.PSObject.TypeNames.Insert(0, 'PowerUp.ModifiablePath')
+                    return $Out
                 }
             }
         }
@@ -3483,6 +3524,9 @@ function Get-WritableServices {
     $servicepaths = (Get-WmiObject -Class Win32_Service | where {$_.pathname}).pathname | Sort-Object -Unique
     if($servicepaths){
         $list = Get-ModifiablePath $servicepaths -SkipUser $SkipUser
+    }else{
+        Write-Output "[-]Failed to gather services"
+        return
     }
     if(!$list){
         return "[+] Non Writable Service Path Found"
@@ -4851,7 +4895,7 @@ function Invoke-WinEnum {
     #
     Write-Output "`n[*] Checking ACL's on Scheduled Tasks Binaries and Folders"
     try{
-        Get-WritableScheduledTasks -SkipUser $Admins
+        Get-WritableScheduledTasks -SkipUser $Admins | fl *
     }catch{
         Write-Output "[-] Checking ACL on Scheduled Tasks Failed"
     }
@@ -4859,7 +4903,7 @@ function Invoke-WinEnum {
     #
     Write-Output "`n[*] Checking ACL's on Folders in Admins PATH"
     try{
-        Get-WritableAdminPath -SkipUser $Admins
+        Get-WritableAdminPath -SkipUser $Admins | fl *
     }catch{
         Write-Output "[-] Checking Admins PATH Failed"
     }
@@ -4867,7 +4911,7 @@ function Invoke-WinEnum {
     #
     Write-Output "`n[*] Checking ACL's on Services Binaries and Folders"
     try{
-        Get-WritableServices -SkipUser $Admins
+        Get-WritableServices -SkipUser $Admins | fl *
     }catch{
         Write-Output "[-] Checking Services Failed"
     }
@@ -4875,7 +4919,7 @@ function Invoke-WinEnum {
     #
     Write-Output "`n[*] Checking ACL's on AutoRuns Binaries and Folders"
     try{
-        Get-WritableAutoRuns -SkipUser $Admins
+        Get-WritableAutoRuns -SkipUser $Admins | fl *
     }catch{
         Write-Output "[-] Checking AutoRuns Failed"
     }
@@ -4902,6 +4946,14 @@ function Invoke-WinEnum {
         Get-NonstandardService | Format-List *
     }catch{
         Write-Output "[-] Checking non stand services Failed"
+    }
+
+    #
+    Write-Output "`n[*] Checking for nonstandard scheduled tasks"
+    try{
+        Get-NonstandardTask
+    }catch{
+        Write-Output "[-] Checking nonstandard scheduled task failed"
     }
 
     #
@@ -4952,6 +5004,13 @@ function Invoke-WinEnum {
         Write-Output "[-] Checking wsus server failed"
     }
 
+    Write-Output "`n[*] Checking for dotnet services.."
+    try{
+        Get-DotNetServices 
+    }catch{
+        Write-Output "[-] dotnet services failed"
+    }
+
     #
     $role = (get-wmiObject -Class Win32_ComputerSystem).DomainRole
     if($role -ge 2){
@@ -4978,13 +5037,6 @@ function Invoke-WinEnum {
         
         Write-Output "`n[*] Checking for sensitive logs.."
         Invoke-EventLogParser -All
-        
-        Write-Output "`n[*] Checking for dotnet services.."
-        try{
-            Get-DotNetServices 
-        }catch{
-            Write-Output "[-] dotnet services failed"
-        }
     }
     Write-Output "Scan took $($timer.Elapsed.TotalSeconds) Seconds"
     $timer.Stop()
