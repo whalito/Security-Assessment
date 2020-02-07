@@ -24,7 +24,8 @@ Scripts written to aid automated scanning during whitebox security/vuln assessme
 * CVE on Installed Software (vulmap)
 * WSUS HTTP Config
 * Non-standard Services
-* Non-Standard Processes
+* Non-standard Processes
+* Non-standard scheduled tasks
 * Print Spool and Wpad Status
 * PowerShell Logging Configuration
 * DPAPI Blobs & Masterkeys
